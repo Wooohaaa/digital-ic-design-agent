@@ -4,10 +4,11 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
-from fpga_agent.terminal import ProcessRunner, Session, Settings, Workspace, make_plan, redact
+from fpga_agent.terminal import ProcessRunner, Session, Settings, Workspace, make_plan, redact, read_json, write_json
 
 
 class WorkspaceTests(unittest.TestCase):
@@ -53,6 +54,24 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_redaction(self):
         self.assertEqual(redact("key=test-password", {"OPENAI_API_KEY": "test-password"}), "key=[redacted]")
+
+    def test_atomic_checkpoints_remain_readable_during_concurrent_updates(self):
+        path = self.workspace.state/'checkpoint.json'
+        write_json(path, {'iteration':0})
+        errors=[]
+        def update():
+            try:
+                for i in range(100):
+                    write_json(path, {'iteration':i, 'payload':'x'*500})
+            except Exception as exc:
+                errors.append(exc)
+        thread=threading.Thread(target=update)
+        thread.start()
+        while thread.is_alive():
+            self.assertIsInstance(read_json(path), dict)
+        thread.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(read_json(path)['iteration'],99)
 
 
 class ProcessTests(unittest.IsolatedAsyncioTestCase):

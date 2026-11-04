@@ -372,6 +372,8 @@ def parser() -> argparse.ArgumentParser:
     suite=commands.add_parser('cpu-suite',help='independent RV32I regression across prepared CPU designs')
     suite.add_argument('--root',default='benchmarks')
     suite.add_argument('--full',action='store_true')
+    from .autonomy import configure_parser
+    configure_parser(commands)
     return root
 
 
@@ -383,6 +385,9 @@ def main(argv: list[str] | None = None) -> int:
         argv.insert(0, "tui")
     args = parser().parse_args(argv)
     try:
+        if args.command == "task":
+            from .autonomy import dispatch
+            return dispatch(args)
         if args.command == "tui":
             try:
                 from .tui import launch

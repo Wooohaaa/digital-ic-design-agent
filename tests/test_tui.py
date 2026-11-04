@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -26,6 +27,61 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
             if not app.busy and not app.queued_input and not app.processing_queue:
                 return
         self.fail("UI task did not finish")
+
+    async def test_long_task_obeys_plan_mode_and_autonomy_setting_persists(self):
+        app = ForgeApp(self.root)
+        app.extra_env["OPENAI_API_KEY"] = "fixture-not-real"
+        app.settings.mode = "plan"
+        async with app.run_test(size=(110, 40)):
+            await app.submit_command('/task --simulation-only 创建 FIFO 并验证')
+            argv = app.pending.commands[0]
+            self.assertEqual(argv[4:6], ['task', 'start'])
+            self.assertIn('创建 FIFO 并验证', argv)
+            self.assertEqual(argv[argv.index('--target')+1], 'simulation')
+            self.assertFalse(list((app.workspace.state/'tasks').glob('*/task.json')))
+            await app.submit_command('/auto off')
+            self.assertEqual(app.workspace.settings().autonomy, 'manual')
+
+    async def test_background_task_accepts_steering_and_blocks_overlapping_tools(self):
+        from fpga_agent.autonomy import Lease, TaskStore
+        from fpga_agent.terminal import write_json
+        app = ForgeApp(self.root)
+        async with app.run_test(size=(110, 40)):
+            store = TaskStore(app.workspace)
+            task = store.create('完成 FIFO')
+            write_json(app.workspace.state/'task-worker.json', {'id':task['id']})
+            lease = Lease(store.lock)
+            try:
+                await app.submit_command('增加复位边界覆盖')
+                self.assertEqual(len(list((store.directory(task['id'])/'inbox').glob('*.json'))), 1)
+                with self.assertRaisesRegex(ValueError, '长期任务'):
+                    await app.submit_command('/verify')
+                await app.submit_command('/tasks')
+                self.assertTrue(any(task['id'] in m['content'] for m in app.session.messages))
+            finally:
+                lease.close()
+
+    async def test_complex_model_action_promotes_to_durable_task_by_default(self):
+        from fpga_agent.terminal import write_json
+        app = ForgeApp(self.root)
+        async with app.run_test(size=(110, 40)):
+            app.begin_job('model fixture')
+            directory = app.job_directory
+
+            class Runner:
+                cancelled = False
+                async def run(self, *args):
+                    write_json(directory/'response.json', {'message':'设计 FIFO', 'action':'design',
+                        'arguments':{'project':'fifo','brief':'FIFO','full':True}})
+                    return 0
+
+            app.runner = Runner()
+            with patch.object(app, 'start_plan') as start:
+                await app.chat({'mode':'build','messages':[{'role':'user','content':'设计 FIFO 并完整交付'}]})
+                argv = start.call_args[0][0].commands[0]
+                self.assertEqual(argv[4:6], ['task','start'])
+                self.assertIn('设计 FIFO 并完整交付', argv)
+                self.assertEqual(argv[argv.index('--target')+1], 'delivery')
 
     async def test_keyboard_palette_history_multiline_and_responsive_layout(self):
         app = ForgeApp(self.root)

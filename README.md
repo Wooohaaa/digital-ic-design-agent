@@ -16,6 +16,18 @@ icforge
 
 在界面里用 `/connect` 连接模型，`/project` 选择工程，`/verify` 验证，`/flow` 完成实现交付。`Ctrl+P` 命令面板、`Ctrl+O` 文件搜索、`Shift+Tab` 切换 Plan / Build、`Esc` 取消任务。完整操作与迁移说明见 [终端工作台指南](docs/terminal.md)。已有 CLI 命令继续可用。
 
+## 主动任务与长期执行
+
+复杂设计请求默认持续规划并调用工程工具，直到达到验收目标、遇到阻塞或耗尽预算。也可用 `/task 目标` 明确启动后台任务；目标、计划、工作记忆和执行记录持久保存。关闭 TUI 后后台 worker 继续工作，重新进入后用 `/tasks` 查看，`/pause` 暂停，`/continue` 恢复，`/stop` 取消。运行期间可直接追加要求。
+
+```powershell
+icforge task start '完成当前 CPU 的验证、FPGA 实现和交付' --project benchmarks/rv32_multi --max-steps 64 --max-hours 24
+icforge task status
+icforge task logs
+```
+
+`/auto off` 切回单次工具模式。暂停/异常恢复会重新检查工程证据；每个工作区只允许一个持续任务。使用方式、验收门槛和测试边界见 [主动任务指南](docs/autonomous-tasks.md)。
+
 用于逐步积累数字 IC 设计能力的本地 agent。当前已实现模型生成/修复、独立 RISC-V 指令级验证、Anlogic TD 综合与布局布线、时序/产物验收和交付归档。
 
 本轮由 **gpt-6-luna** 生成了单周期、多周期、两级流水线三份 RV32I CPU。每份通过 114 个程序、18,099 条指令提交比对、片上 ROM/RAM 签名测试和 50 MHz TD 实现。实测表格见 [riscv-results.md](docs/riscv-results.md)，接口和覆盖范围见 [riscv-flow.md](docs/riscv-flow.md)。

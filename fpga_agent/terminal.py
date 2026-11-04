@@ -9,6 +9,7 @@ import re
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -33,6 +34,11 @@ COMMANDS = {
     "/tinyllm": "TinyStories260K 工程：/tinyllm name --full",
     "/logo": "选择 ICFORGE 字标",
     "/plan": "切换 Plan / Build", "/run": "执行待运行计划",
+    "/task": "启动持续任务：/task 目标（--simulation-only 仅仿真）",
+    "/auto": "自然语言复杂设计任务自动持续执行：/auto on 或 off",
+    "/tasks": "查看长期任务：/tasks [ID]", "/pause": "暂停长期任务",
+    "/continue": "恢复长期任务", "/stop": "取消长期任务",
+    "/steer": "补充长期任务要求：/steer ID 内容",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
     "/export": "导出 Markdown 会话", "/cancel": "取消当前任务", "/quit": "退出",
 }
@@ -43,17 +49,34 @@ def timestamp() -> str:
 
 
 def read_json(path: Path, default=None):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return default
+    for attempt in range(8):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            # A concurrent atomic replacement can briefly deny reads on Windows.
+            if attempt < 7:
+                time.sleep(0.01)
+        except (OSError, ValueError):
+            return default
+    return default
 
 
 def write_json(path: Path, value) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # Windows readers/virus scanners may briefly deny replacing an open file.
+        for attempt in range(12):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 11:
+                    raise
+                time.sleep(min(0.01 * (attempt + 1), 0.05))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def redact(text: str, environment: dict[str, str] | None = None) -> str:
@@ -73,6 +96,7 @@ class Settings:
     mode: str = "build"
     theme: str = "forge"
     logo: str = "block"
+    autonomy: str = "auto"
 
 
 @dataclass
@@ -110,6 +134,8 @@ class Workspace:
             result.theme = "forge"
         if result.logo not in LOGOS:
             result.logo = "block"
+        if result.autonomy not in {"auto", "manual"}:
+            result.autonomy = "auto"
         return result
 
     def save_settings(self, settings: Settings) -> None:
@@ -302,13 +328,16 @@ class ProcessRunner:
         self.process: asyncio.subprocess.Process | None = None
         self.cancelled = False
 
-    async def run(self, argv: list[str], cwd: Path, env: dict[str, str], on_output: Callable[[str], None]) -> int:
+    async def run(self, argv: list[str], cwd: Path, env: dict[str, str], on_output: Callable[[str], None],
+                  on_spawn: Callable[[int], None] | None = None) -> int:
         if self.cancelled:
             return 130
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
         self.process = await asyncio.create_subprocess_exec(*argv, cwd=cwd, env=env,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **options)
         try:
+            if on_spawn:
+                on_spawn(self.process.pid)
             if self.cancelled:
                 await self.cancel()
             assert self.process.stdout is not None

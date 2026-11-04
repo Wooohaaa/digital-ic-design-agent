@@ -18,6 +18,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Markdown, OptionList, RichLog, Select, Static, TextArea
@@ -46,6 +47,12 @@ HELP = """### 在终端完成设计闭环
 | `/status` · `/artifacts` · `/open path` | 当前证据、产物、文件预览 |
 | `/diff` | 查看 Git 工作区差异 |
 | `/plan` · `/run` | 切换 Plan / Build、执行计划 |
+| `/task 目标` | 创建后台持续任务，默认验收到 FPGA 交付 |
+| `/auto on` · `/auto off` | 复杂设计请求自动持续执行 / 单次工具模式 |
+| `/task --simulation-only 目标` | 持续执行到仿真验收 |
+| `/tasks [ID]` | 查看目标、计划、进度和停止原因 |
+| `/pause [ID]` · `/continue [ID]` · `/stop [ID]` | 暂停、恢复、取消长期任务 |
+| `/steer ID 内容` | 保存追加要求，下次决策前读取 |
 | `/new` · `/resume` · `/export` | 会话管理与 Markdown 导出 |
 
 **Enter** 发送 · **Shift+Enter** 换行 · **Tab** 补全斜杠命令 · **↑/↓** 历史输入
@@ -308,6 +315,8 @@ class ForgeApp(App):
         self.queued_input: list[dict[str, str]] = []
         self.processing_queue = False
         self.task_status_generation = 0
+        self.long_task_seen: dict[str, tuple] = {}
+        self.long_task_status = ""
 
     def get_css_variables(self) -> dict[str, str]:
         variables = super().get_css_variables()
@@ -342,6 +351,7 @@ class ForgeApp(App):
         self.query_one("#prompt", Prompt).input_history_index = len(self.query_one("#prompt", Prompt).input_history)
         self.set_interval(0.5, self.tick)
         self.set_interval(0.3, self.process_queued_input)
+        self.set_interval(1.0, self.poll_long_tasks)
         self.query_one("#prompt").focus()
 
     def on_resize(self, event) -> None:
@@ -402,6 +412,8 @@ class ForgeApp(App):
         status.append(f'  ·  {self.selected.name if self.selected else self.workspace.root.name}', style=palette.muted)
         if self.queued_input:
             status.append(f"  ·  {len(self.queued_input)} queued", style=palette.warning)
+        if self.long_task_status:
+            status.append('  ·  ' + self.long_task_status, style=palette.highlight)
         self.query_one("#status-line", Static).update(status)
         self.refresh_welcome()
 
@@ -493,6 +505,19 @@ class ForgeApp(App):
             self.processing_queue = False
 
     async def submit_command(self, text: str) -> None:
+        from .autonomy import TaskStore
+        task_store = TaskStore(self.workspace)
+        if task_store.busy():
+            owner = read_json(self.workspace.state / "task-worker.json", {})
+            if not text.startswith("/") and owner.get("id"):
+                task_store.steer(owner["id"], text)
+                await self.add_message("system", "补充要求已保存，将在长期任务的下一次决策前读取。")
+                return
+            allowed = {"/tasks", "/pause", "/stop", "/steer", "/status", "/help", "/?", "/connect",
+                       "/theme", "/logo", "/model", "/provider", "/open", "/files", "/artifacts",
+                       "/export", "/diff", "/quit", "/exit", "/cancel", "/auto"}
+            if text.partition(" ")[0] not in allowed:
+                raise ValueError("长期任务正在操作工作区。用 /pause 暂停，或直接输入补充要求。")
         if not text.startswith("/"):
             local = {"运行仿真": "verify", "验证当前工程": "verify", "run tests": "verify", "完整实现交付": "flow", "生成交付包": "package"}
             if text in local:
@@ -503,7 +528,47 @@ class ForgeApp(App):
         command, _, rest = text.partition(" ")
         rest = rest.strip()
         tokens = [next((part for part in match if part), "") for match in re.findall(r'"([^"]*)"|\'([^\']*)\'|(\S+)', rest)] if rest else []
-        if command in ("/help", "/?"):
+        if command == "/task":
+            simulation = rest.startswith("--simulation-only ")
+            objective = rest.removeprefix("--simulation-only ").strip() if simulation else rest
+            if not objective:
+                raise ValueError("用法：/task 目标，或 /task --simulation-only 目标。")
+            if not self.model_ready():
+                raise ValueError("先用 /connect 连接实时模型后端，再启动持续任务。")
+            await self.offer_plan(self.long_task_plan(objective, "simulation" if simulation else "delivery", self.selected))
+        elif command == "/auto":
+            if rest and rest not in {"on", "off"}:
+                raise ValueError("用法：/auto on 或 /auto off。")
+            if rest:
+                self.settings.autonomy = "auto" if rest == "on" else "manual"
+                self.workspace.save_settings(self.settings)
+            await self.add_message("system", "复杂设计持续执行：" + self.settings.autonomy)
+        elif command == "/tasks":
+            tasks = [task_store.get(rest)] if rest else task_store.list()[:10]
+            lines = []
+            for task in tasks:
+                lines.append(f"**{task['id']} · {task['status']}** · {task['iterations']}/{task['limits']['steps']} 步\n\n"
+                             f"{task['objective']}\n\n{task['reason']}")
+                if task.get("plan"):
+                    lines.append("\n".join("- " + item for item in task["plan"]))
+                if task.get("completion_evidence"):
+                    lines.append(task["completion_evidence"])
+            await self.add_message("assistant", "\n\n".join(lines) or "暂无长期任务。用 /task 目标 启动。")
+        elif command in ("/pause", "/stop", "/continue"):
+            task_id = tokens[0] if tokens else "latest"
+            if command == "/continue":
+                # CLI options such as --extra-steps/--extra-hours can extend an exhausted budget.
+                argv = [sys.executable, "-u", "-m", "fpga_agent", "task", "resume", task_id,
+                        "--workspace", str(self.workspace.root)] + tokens[1:]
+                await self.offer_plan(TaskPlan("恢复长期任务", [argv]))
+            else:
+                task = task_store.control(task_id, "pause" if command == "/pause" else "cancel")
+                await self.add_message("system", f"已提交控制请求：{command} {task['id']}。运行中的工具会被终止，状态可用 /tasks 查看。")
+        elif command == "/steer":
+            task_id, _, message = rest.partition(" ")
+            task_store.steer(task_id, message)
+            await self.add_message("system", "补充要求已持久保存。")
+        elif command in ("/help", "/?"):
             await self.add_message("assistant", HELP)
         elif command == "/connect":
             self.push_screen(Connection(self.settings), self.connected)
@@ -614,6 +679,14 @@ class ForgeApp(App):
             await self.add_message("assistant", f"待执行：**{plan.title}**\n\n步骤：`{steps}`。输入 `/run` 执行。")
         else:
             self.start_plan(plan)
+
+    def long_task_plan(self, objective: str, target: str, project: Path | None) -> TaskPlan:
+        argv = [sys.executable, "-u", "-m", "fpga_agent", "task", "start", objective,
+                "--workspace", str(self.workspace.root), "--provider", self.settings.provider,
+                "--model", self.settings.model, "--target", target]
+        if project:
+            argv += ["--project", project.relative_to(self.workspace.root).as_posix()]
+        return TaskPlan("启动长期任务", [argv])
 
     async def connected(self, values: dict | None) -> None:
         if not values:
@@ -773,6 +846,11 @@ class ForgeApp(App):
             self.query_one("#task-status").display = False
 
     def start_plan(self, plan: TaskPlan) -> None:
+        from .autonomy import TaskStore
+        # Also guard plans created before another terminal launched a background worker.
+        readonly = all(command[:2] == ["git", "diff"] for command in plan.commands)
+        if TaskStore(self.workspace).busy() and not readonly:
+            raise ValueError("后台长期任务运行中，先 /pause 再执行其它工具。")
         self.begin_job(plan.title)
         self.pending = None
         self.run_worker(self.execute(plan), group="task", exit_on_error=False)
@@ -856,6 +934,11 @@ class ForgeApp(App):
                 await self.add_message("assistant", result.get("message", ""))
                 if result.get("action", "none") != "none":
                     plan = make_plan(self.workspace, self.settings, result["action"], result["arguments"], self.selected)
+                    if self.settings.autonomy == "auto" and result["action"] in {"design", "cpu-design", "tinyllm", "flow"}:
+                        objective = next((m["content"] for m in reversed(request["messages"]) if m.get("role") == "user"), "")
+                        target = "delivery" if result["arguments"].get("full") or result["action"] == "flow" else "simulation"
+                        plan = self.long_task_plan(objective, target, plan.project)
+                        await self.add_message("system", "该设计请求将由后台长期任务持续推进，使用 /tasks 查看进度。")
                     if request["mode"] == "plan":
                         self.pending = plan
                         plan = None
@@ -874,6 +957,39 @@ class ForgeApp(App):
         if self.runner:
             self.query_one("#task-status", Static).update("正在终止任务及子进程…")
             await self.runner.cancel()
+
+    async def poll_long_tasks(self) -> None:
+        if not self.is_mounted or len(self.screen_stack) != 1 or not self.query("#transcript"):
+            return
+        from .autonomy import TaskStore
+        store = TaskStore(self.workspace)
+        active = ""
+        for task in store.list()[:10]:
+            task_id = task["id"]
+            marker = (task["status"], task["iterations"], (task["steps"][-1].get("status") if task["steps"] else ""))
+            previous = self.long_task_seen.get(task_id)
+            self.long_task_seen[task_id] = marker
+            if task["status"] in {"queued", "running"}:
+                active = f"task {task_id[:6]} · {task['iterations']}/{task['limits']['steps']}"
+            if previous == marker or (previous is None and task["status"] not in {"queued", "running", "interrupted"}):
+                continue
+            message = f"长期任务 `{task_id}` · **{task['status']}** · {task['iterations']}/{task['limits']['steps']} 步"
+            if task["steps"]:
+                decision = task["steps"][-1].get("decision", {})
+                if decision.get("message"):
+                    message += "\n\n" + decision["message"]
+            if task["status"] not in {"running", "queued"}:
+                message += "\n\n" + task["reason"]
+                if task.get("completion_evidence"):
+                    message += "\n\n" + task["completion_evidence"]
+            try:
+                await self.add_message("tool", message)
+            except NoMatches:
+                # Timers may be dequeued just as Textual removes the root screen.
+                return
+        if active != self.long_task_status and self.query("#status-line"):
+            self.long_task_status = active
+            self.refresh_panels()
 
     async def action_interrupt(self) -> None:
         if self.busy:

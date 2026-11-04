@@ -1,5 +1,7 @@
 # IC Forge 终端工作台
 
+复杂设计请求默认启动后台持续任务，`/task`、`/tasks`、`/pause`、`/continue` 和 `/stop` 的用法见 [主动任务与长期执行](autonomous-tasks.md)。
+
 ## 启动
 
 在 PowerShell、Windows Terminal 或 VS Code 终端里，进入工程仓库运行：
