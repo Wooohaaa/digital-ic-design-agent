@@ -1,78 +1,211 @@
 $forge-bg: #0d1015;
 $forge-panel: #12171e;
-$forge-raised: #1a222c;
 $forge-line: #293542;
 $forge-muted: #8998a9;
 $forge-accent: #55aaff;
 $forge-violet: #9bb8d4;
 
-Screen { background: $forge-bg; color: #dbe2ef; }
-#topbar { height: 2; padding: 0 2; align: left middle; background: $forge-bg; border-bottom: solid $forge-line; }
-#brand { width: auto; min-width: 14; content-align: left middle; }
-#project-badge { width: 1fr; content-align: center middle; color: $forge-muted; }
-#connection-status { width: auto; max-width: 44; content-align: right middle; }
-#layout { height: 1fr; }
-#sidebar, #inspector { display: none; }
-.section-title { color: $forge-muted; text-style: bold; height: 1; margin: 1 0; }
-#workspace-name { color: $forge-accent; height: 2; }
-#projects { height: 1fr; min-height: 4; background: transparent; border: none; padding: 0; }
-OptionList > .option-list--option-highlighted { background: $forge-raised; color: $forge-accent; }
-OptionList:focus { border: none; }
-#sidebar Button { width: 100%; height: 3; margin-top: 1; border: none; background: $forge-raised; color: #b7c1d6; text-align: left; }
-#sidebar Button:hover { background: #233446; color: $forge-accent; }
-#session-info { height: 3; margin-top: 2; }
-.muted { color: $forge-muted; height: auto; }
-#center { width: 1fr; min-width: 32; padding: 0 2; }
-#transcript { height: 1fr; padding: 1 0; scrollbar-size: 1 1; }
-#welcome { height: auto; margin: 1 0; }
-#wordmark { color: $forge-accent; height: 15; margin-bottom: 1; }
-#welcome-title { text-style: bold; color: #eef2fb; height: 1; }
-#welcome-subtitle { color: $forge-muted; height: 1; }
-#welcome-note { height: 1; margin-top: 1; color: $forge-muted; }
-.message { height: auto; margin: 0 0 1 0; padding: 0 0 1 0; background: transparent; border-bottom: solid #222c37; }
-.message.user, .message.assistant, .message.tool, .message.system { border-left: none; background: transparent; }
-.role { height: 1; color: $forge-muted; text-style: bold; margin-bottom: 0; }
-.user .role { color: $forge-accent; }
-.assistant .role { color: $forge-violet; }
-.tool .role { color: #d4ad72; }
-Markdown { margin: 0; padding: 0; background: transparent; }
-MarkdownH3 { color: $forge-violet; }
+Screen {
+    background: $forge-bg;
+    color: #dbe2ef;
+}
+
+#app-shell {
+    height: 100%;
+    width: 100%;
+    padding: 0 2;
+}
+
+#transcript {
+    height: 1fr;
+    min-height: 5;
+    padding: 1 0;
+    scrollbar-size: 1 1;
+}
+
+#welcome {
+    height: auto;
+    margin: 2 0 1 0;
+}
+
+#wordmark {
+    height: 15;
+    margin-bottom: 1;
+    color: $forge-accent;
+}
+
+#wordmark-compact {
+    display: none;
+    height: 2;
+    margin-bottom: 1;
+    color: $forge-accent;
+}
+
+#welcome-title {
+    height: 1;
+    color: #eef2fb;
+    text-style: bold;
+}
+
+#welcome-meta, #welcome-note {
+    height: 1;
+    color: $forge-muted;
+}
+
+#welcome-note {
+    margin-top: 1;
+}
+
+.message {
+    width: 1fr;
+    height: auto;
+    margin: 0 0 1 0;
+    padding: 0 0 1 0;
+    border-bottom: solid #222c37;
+    background: transparent;
+}
+
+.message-row {
+    width: 1fr;
+    height: auto;
+}
+
+.message-glyph {
+    width: 3;
+    height: 1;
+    padding-left: 1;
+    color: $forge-muted;
+}
+
+.message.user .message-glyph { color: $forge-accent; }
+.message.assistant .message-glyph { color: $forge-violet; }
+.message.tool .message-glyph { color: #d4ad72; }
+.message.system .message-glyph { color: $forge-muted; }
+
+.message-content {
+    width: 1fr;
+    height: auto;
+}
+
+.message-title {
+    height: 1;
+    color: $forge-violet;
+    text-style: bold;
+}
+
+Markdown {
+    width: 1fr;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+}
+
+MarkdownH1, MarkdownH2, MarkdownH3 { color: $forge-violet; }
 MarkdownFence { background: #111923; }
-#logs { height: 8; min-height: 4; border: round $forge-line; background: #080c13; padding: 0 1; scrollbar-size: 1 1; }
-#task-row { height: 1; align: left middle; }
-#spinner { width: 3; height: 1; color: $forge-accent; }
-#task-status { width: 1fr; color: $forge-muted; content-align: left middle; }
-#suggestions { height: auto; max-height: 4; padding: 0 1; color: $forge-muted; background: transparent; }
-#composer { height: 5; border: round $forge-line; padding: 0 1; background: $forge-panel; margin-bottom: 0; }
-#composer:focus-within { border: round $forge-accent; }
-#composer-bar { height: 1; }
-#mode { width: auto; min-width: 12; }
-#input-hint { width: 1fr; color: $forge-muted; text-align: right; }
-#prompt { height: 2; min-height: 1; border: none; padding: 0; background: $forge-panel; }
+
+#task-status {
+    display: none;
+    height: 1;
+    margin-bottom: 1;
+    color: $forge-accent;
+}
+
+#logs {
+    height: 10;
+    max-height: 32%;
+    margin-bottom: 1;
+    padding: 0 1;
+    border: round $forge-line;
+    background: #080c13;
+    scrollbar-size: 1 1;
+}
+
+#suggestions {
+    display: none;
+    height: auto;
+    max-height: 4;
+    padding: 0 1 0 3;
+    color: $forge-muted;
+}
+
+#composer {
+    height: auto;
+    min-height: 3;
+    max-height: 8;
+    margin-top: 1;
+    padding-top: 1;
+    border-top: solid $forge-line;
+    background: $forge-bg;
+}
+
+#composer:focus-within {
+    border-top: solid $forge-accent;
+}
+
+#prompt-glyph {
+    width: 3;
+    height: 1;
+    padding: 0 0 0 1;
+    color: $forge-accent;
+}
+
+#prompt {
+    width: 1fr;
+    height: auto;
+    min-height: 2;
+    max-height: 7;
+    padding: 0;
+    border: none;
+    background: $forge-bg;
+}
+
 #prompt:focus { border: none; }
 TextArea > .text-area--cursor { background: $forge-accent; color: $forge-bg; }
-#evidence { height: auto; min-height: 5; margin-bottom: 1; }
-#pipeline { height: 10; color: #8292b0; }
-#tools { height: 4; }
-Footer { height: 1; padding: 0 1; background: $forge-bg; color: $forge-muted; }
-FooterKey > .footer-key--key { background: $forge-raised; color: $forge-accent; }
-Screen.compact #inspector { display: none; }
-Screen.narrow #center { padding: 0 1; }
-Screen.narrow #input-hint { display: none; }
-Screen.narrow #brand { min-width: 12; }
-Screen.narrow #connection-status { max-width: 28; }
-Screen.narrow #wordmark { display: none; }
+
+#status-line {
+    height: 1;
+    padding: 0 1;
+    color: $forge-muted;
+}
+
 ModalScreen { align: center middle; background: #070b12 85%; }
-.dialog { width: 78; max-width: 95%; max-height: 90%; height: auto; padding: 1 2; border: round $forge-violet; background: $forge-panel; }
-.dialog-title { height: 2; color: $forge-accent; text-style: bold; }
+
+.dialog {
+    width: 78;
+    max-width: 95%;
+    max-height: 90%;
+    height: auto;
+    padding: 1 2;
+    border: round $forge-violet;
+    background: $forge-panel;
+}
+
+.dialog-title {
+    height: 2;
+    color: $forge-accent;
+    text-style: bold;
+}
+
 .dialog Input { background: $forge-bg; border: tall $forge-line; }
 .dialog Input:focus { border: tall $forge-accent; }
+.muted { height: auto; color: $forge-muted; }
+
 #picker { height: 24; }
 #picker-options { height: 1fr; border: none; background: transparent; }
+OptionList > .option-list--option-highlighted { background: #1a222c; color: $forge-accent; }
+OptionList:focus { border: none; }
+
 #connection { height: auto; }
-#connection Label { margin-top: 1; height: 1; color: #a7b0c4; }
+#connection Label { height: 1; margin-top: 1; color: #a7b0c4; }
 #connection Select { margin: 0; }
 .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
 .dialog-buttons Button { margin-left: 1; border: none; }
+
 #preview { width: 100; height: 90%; }
 #preview VerticalScroll { height: 1fr; }
+
+Screen.narrow #app-shell { padding: 0 1; }
+Screen.narrow #wordmark { display: none; }
+Screen.narrow #wordmark-compact { display: block; }
+Screen.narrow #welcome { margin-top: 1; }

@@ -12,16 +12,15 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from rich.markup import escape
 from rich.syntax import Syntax
 from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.screen import ModalScreen
-from textual.widgets import Button, Footer, Input, Label, LoadingIndicator, Markdown, OptionList, RichLog, Select, Static, TextArea
+from textual.widgets import Button, Input, Label, Markdown, OptionList, RichLog, Select, Static, TextArea
 from textual.widgets.option_list import Option
 
 from .terminal import COMMANDS, PROVIDERS, ProcessRunner, Session, TaskPlan, Workspace, evidence, make_plan, read_json, redact, write_json
@@ -65,6 +64,7 @@ HELP = """### 在终端完成设计闭环
 **Enter** 发送 · **Shift+Enter** 换行 · **Tab** 补全斜杠命令 · **↑/↓** 历史输入
 **Ctrl+P** 命令面板 · **Ctrl+O** 文件搜索 · **Ctrl+B** 选择工程 · **Ctrl+J** 日志 · **Shift+Tab** 模式
 **Esc** 取消运行 · **Ctrl+N** 新会话 · **Ctrl+Q** 退出
+任务运行时继续输入会自动排队，当前任务结束后依次执行。
 
 API Key 只在当前进程内存和子进程环境中使用。会话与设置保存在当前工作区 `.fpga-agent/`。
 会读取工作区和当前工程的 AGENTS.md / CLAUDE.md / GEMINI.md 作为项目上下文。
@@ -143,9 +143,13 @@ class MessageCard(Vertical):
         self.role, self.text = role, text
 
     def compose(self) -> ComposeResult:
-        names = {"user": "YOU", "assistant": "ℑℭ 𝔉𝔬𝔯𝔤𝔢", "tool": "TOOL RESULT", "system": "WORKSPACE"}
-        yield Static(names.get(self.role, self.role.upper()), classes="role")
-        yield Markdown(self.text, open_links=False)
+        glyphs = {"user": "❯", "assistant": "☤", "tool": "🔧", "system": "·"}
+        with Horizontal(classes="message-row"):
+            yield Static(glyphs.get(self.role, "·"), classes="message-glyph")
+            with Vertical(classes="message-content"):
+                if self.role == "assistant":
+                    yield Static("ℑℭ 𝔉𝔬𝔯𝔤𝔢", classes="message-title")
+                yield Markdown(self.text, open_links=False)
 
 
 class Picker(ModalScreen[str | None]):
@@ -269,6 +273,10 @@ class ForgeApp(App):
         self.workspace = Workspace(Path(workspace))
         self.settings = self.workspace.settings()
         self.session = self.workspace.resume(resume) if resume else Session(project=self.settings.project)
+        # A prior process may have closed with prompts still queued. Treat them as
+        # ordinary conversation history when resuming; only the in-memory queue runs work.
+        for message in self.session.messages:
+            message.pop("queue_id", None)
         self.selected: Path | None = None
         if self.session.project:
             try:
@@ -283,64 +291,40 @@ class ForgeApp(App):
         self.extra_env: dict[str, str] = {}
         self.started = 0.0
         self.task_title = "Ready"
-        self.phase = ""
         self.tail: list[str] = []
         self.job_directory: Path | None = None
         self.project_paths: list[Path] = []
+        self.queued_input: list[dict[str, str]] = []
+        self.processing_queue = False
+        self.task_status_generation = 0
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="topbar"):
-            yield Static("[bold #55aaff]ℑℭ 𝔉𝔬𝔯𝔤𝔢[/]", id="brand")
-            yield Static(id="project-badge", classes="muted")
-            yield Static(id="connection-status")
-        with Horizontal(id="layout"):
-            with Vertical(id="sidebar"):
-                yield Static("WORKSPACE", classes="section-title")
-                yield Static(self.workspace.root.name, id="workspace-name", markup=False)
-                yield Static("PROJECTS", classes="section-title")
-                yield OptionList(id="projects", markup=False)
-                yield Button("＋  新建工程", id="new-project")
-                yield Static("QUICK ACTIONS", classes="section-title")
-                yield Button("▷  验证当前工程", id="quick-verify")
-                yield Button("◇  完整实现交付", id="quick-flow")
-                yield Static(id="session-info", classes="muted")
-            with Vertical(id="center"):
-                with VerticalScroll(id="transcript"):
-                    with Vertical(id="welcome"):
-                        yield Static(FRAKTUR_WORDMARK, id="wordmark", markup=False)
-                        yield Static("从规格到经过验证的 RTL。", id="welcome-title")
-                        yield Static("描述设计需求，或输入 / 查看命令；用 @路径附加文件。", id="welcome-subtitle")
-                        yield Static("/connect 模型   /project 工程   /verify 验证", id="welcome-note", classes="muted")
-                yield RichLog(id="logs", highlight=False, markup=False, wrap=True, max_lines=2000)
-                with Horizontal(id="task-row"):
-                    yield LoadingIndicator(id="spinner")
-                    yield Static("Ready", id="task-status")
-                yield Static(id="suggestions")
-                with Vertical(id="composer"):
-                    with Horizontal(id="composer-bar"):
-                        yield Static(id="mode")
-                        yield Static("Enter 发送 · / 命令 · @ 文件", id="input-hint")
-                    yield Prompt(id="prompt")
-            with Vertical(id="inspector"):
-                yield Static("DESIGN EVIDENCE", classes="section-title")
-                yield Static(id="evidence")
-                yield Static("PIPELINE", classes="section-title")
-                yield Static("01   RTL / SPEC\n      ↓\n02   SIMULATION\n      ↓\n03   SYNTHESIS\n      ↓\n04   PLACE & ROUTE\n      ↓\n05   DELIVERY", id="pipeline")
-                yield Static("TOOLS", classes="section-title")
-                yield Static(id="tools")
-                yield Static("Ctrl+P 打开命令面板\nF1 查看完整用法", classes="muted")
-        yield Footer()
+        with Vertical(id="app-shell"):
+            with VerticalScroll(id="transcript"):
+                with Vertical(id="welcome"):
+                    yield Static(FRAKTUR_WORDMARK, id="wordmark", markup=False)
+                    yield Static("ℑℭ 𝔉𝔬𝔯𝔤𝔢", id="wordmark-compact", markup=False)
+                    yield Static("数字 IC 设计 · 仿真 · FPGA 实现", id="welcome-title")
+                    yield Static(f"{self.settings.provider} / {self.settings.model} · {self.workspace.root.name}", id="welcome-meta")
+                    yield Static("输入需求 · /help · Ctrl+P 命令 · Ctrl+B 工程 · Ctrl+J 日志 · @路径文件", id="welcome-note")
+            yield Static(id="task-status")
+            yield RichLog(id="logs", highlight=False, markup=False, wrap=True, max_lines=2000)
+            yield Static(id="suggestions")
+            with Horizontal(id="composer"):
+                yield Static("❯", id="prompt-glyph")
+                yield Prompt(id="prompt")
+            yield Static(id="status-line")
 
     async def on_mount(self) -> None:
         self.query_one("#logs").display = False
         self.query_one("#suggestions").display = False
-        self.query_one("#spinner").display = False
         self.refresh_panels()
         for message in self.session.messages[-100:]:
             await self.render_message(message["role"], message["content"])
         self.query_one("#prompt", Prompt).input_history = [m["content"] for m in self.session.messages if m["role"] == "user"][-100:]
         self.query_one("#prompt", Prompt).input_history_index = len(self.query_one("#prompt", Prompt).input_history)
         self.set_interval(0.5, self.tick)
+        self.set_interval(0.3, self.process_queued_input)
         self.query_one("#prompt").focus()
 
     def on_resize(self, event) -> None:
@@ -365,63 +349,28 @@ class ForgeApp(App):
         return self.settings.provider == "codex" and bool(shutil.which("codex"))
 
     def refresh_panels(self) -> None:
+        """Refresh the compact context line and the project list used by pickers."""
         ready = self.model_ready()
-        self.query_one("#connection-status", Static).update(Text(f"{'●' if ready else '○'} {self.settings.provider} / {self.settings.model}", style="#55aaff" if ready else "#8998a9"))
-        self.query_one("#mode", Static).update(f"[bold {'#55aaff' if self.settings.mode == 'build' else '#9bb8d4'}]{self.settings.mode.upper()}[/]")
-        self.query_one("#project-badge", Static).update(Text(self.selected.name if self.selected else "Ctrl+B 选择工程", style="#8998a9"))
-        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#8998a9"))
         self.project_paths = self.workspace.projects()
-        options = self.query_one("#projects", OptionList)
-        options.clear_options()
-        for i, project in enumerate(self.project_paths):
-            selected = project == self.selected
-            options.add_option(Option(Text(("▸ " if selected else "  ") + project.name, style="#55aaff" if selected else "#b9c6d5"), id=str(i)))
-            if selected:
-                options.highlighted = i
-        if not self.project_paths:
-            options.add_option(Option("暂无工程 · /init name", disabled=True))
-        content = "[#8998a9]选择工程后显示当前证据。[/]"
-        if self.selected:
-            data = evidence(self.selected)
-            manifest = read_json(self.selected / "project.json", {})
-            colors = {"current": "#55aaff", "missing": "#8998a9", "stale": "#efc884", "failed": "#ff7f9b"}
-            labels = {"current": "CURRENT", "missing": "NOT RUN", "stale": "STALE", "failed": "FAILED"}
-            board = read_json(self.selected / "board/hx1p35a.json", {})
-            hz = board.get("nominal_system_clock_hz")
-            clock = f"{hz / 1e6:g} MHz nominal" if isinstance(hz, (int, float)) else "clock not specified"
-            content = f"[bold]{escape(str(manifest.get('top_module', '?')))}[/]\n[#8998a9]{escape(str(manifest.get('board', '?')))}\n{clock}[/]\n\n"
-            for key, title in (("simulation", "SIM"), ("implementation", "TD")):
-                state = data[key]
-                content += f"[{colors[state]}]● {title:<5} {labels[state]}[/]\n"
-            timing = data["timing"]
-            if timing:
-                content += "\n[#8998a9]RECORDED WNS / ns[/]\n" + f"Setup   {timing.get('setup_wns_ns', '—')}\nHold    {timing.get('hold_wns_ns', '—')}\n"
-            lut = data["resources"].get("lut6", {}).get("used")
-            if lut is not None:
-                content += f"\nLUT6    {lut:,}\n"
-        self.query_one("#evidence", Static).update(content)
-        from .td import find_td_command
-        try:
-            find_td_command()
-            td = True
-        except FileNotFoundError:
-            td = False
-        icarus = bool(shutil.which("iverilog") or (Path(__file__).resolve().parent.parent / ".tools/icarus/bin/iverilog.exe").is_file())
-        self.query_one("#tools", Static).update(f"[{'#55aaff' if icarus else '#efc884'}]● Icarus Verilog[/]\n[{'#55aaff' if td else '#efc884'}]● Anlogic TD[/]\n[{'#55aaff' if ready else '#8998a9'}]● Model {'configured' if ready else 'not connected'}[/]")
-        self.refresh_pipeline()
-
-    def refresh_pipeline(self) -> None:
-        lines = []
-        for index, (key, name) in enumerate((("rtl", "RTL / SPEC"), ("sim", "SIMULATION"), ("syn", "SYNTHESIS"), ("route", "PLACE & ROUTE"), ("package", "DELIVERY")), 1):
-            color = "#55aaff" if self.busy and self.phase == key else "#7e8fa4"
-            lines.append(f"[{color}]{index:02d}   {name}[/]")
-            if index < 5:
-                lines.append("[#43516a]      ↓[/]")
-        self.query_one("#pipeline", Static).update("\n".join(lines))
+        status = Text()
+        status.append("● " if ready else "○ ", style="#55aaff" if ready else "#efc884")
+        status.append(f"{self.settings.provider}/{self.settings.model}", style="#c6d0df")
+        status.append(f"  ·  {self.settings.mode.upper()}", style="#8998a9")
+        status.append(f"  ·  {self.selected.name if self.selected else self.workspace.root.name}", style="#8998a9")
+        if self.queued_input:
+            status.append(f"  ·  {len(self.queued_input)} queued", style="#efc884")
+        self.query_one("#status-line", Static).update(status)
+        self.query_one("#welcome-meta", Static).update(
+            f"{self.settings.provider} / {self.settings.model} · {self.workspace.root.name}"
+        )
 
     def tick(self) -> None:
         if self.busy:
-            self.query_one("#task-status", Static).update(Text(f"{self.task_title}   {int(time.monotonic() - self.started)}s · Esc 取消", style="#55aaff"))
+            frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            frame = frames[int(time.monotonic() * 3) % len(frames)]
+            self.query_one("#task-status", Static).update(
+                Text(f"{frame}  {self.task_title} · {int(time.monotonic() - self.started)}s · Esc 取消 · Ctrl+J 日志", style="#55aaff")
+            )
 
     async def render_message(self, role: str, text: str) -> None:
         self.query_one("#welcome").display = False
@@ -429,13 +378,15 @@ class ForgeApp(App):
         await transcript.mount(MessageCard(role, text))
         transcript.scroll_end(animate=False)
 
-    async def add_message(self, role: str, text: str) -> None:
+    async def add_message(self, role: str, text: str, queue_id: str | None = None) -> None:
         text = redact(text, self.environment())
-        self.session.messages.append({"role": role, "content": text, "at": time.time()})
+        message = {"role": role, "content": text, "at": time.time()}
+        if queue_id:
+            message["queue_id"] = queue_id
+        self.session.messages.append(message)
         self.session.messages = self.session.messages[-100:]
         self.workspace.save_session(self.session)
         await self.render_message(role, text)
-        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#8998a9"))
 
     async def select_project(self, path: Path) -> None:
         if self.busy:
@@ -451,14 +402,6 @@ class ForgeApp(App):
         self.pending = None
         self.refresh_panels()
 
-    @on(OptionList.OptionSelected, "#projects")
-    async def project_selected(self, event: OptionList.OptionSelected) -> None:
-        try:
-            await self.select_project(self.project_paths[int(event.option.id)])
-            self.query_one("#prompt").focus()
-        except ValueError as exc:
-            self.notify(str(exc), severity="warning")
-
     @on(TextArea.Changed, "#prompt")
     def suggest(self) -> None:
         text = self.query_one("#prompt", Prompt).text
@@ -470,15 +413,44 @@ class ForgeApp(App):
     @on(Prompt.Submitted)
     async def prompt_submitted(self, event: Prompt.Submitted) -> None:
         text = redact(event.text, self.environment())
-        if self.busy and text not in ("/cancel", "/quit", "/status", "/help"):
-            self.notify("任务运行中。Esc 取消；完成后继续输入。", severity="warning")
+        if not text:
             return
         self.query_one("#prompt", Prompt).remember(text)
-        await self.add_message("user", text)
+        command = text.partition(" ")[0]
+        if self.busy and command not in ("/cancel", "/quit", "/exit", "/status", "/help", "/?"):
+            queue_id = uuid.uuid4().hex
+            self.queued_input.append({"id": queue_id, "text": text})
+            await self.add_message("user", text, queue_id=queue_id)
+            self.notify(f"已排队（{len(self.queued_input)}）。任务结束后自动继续。", timeout=3)
+            self.refresh_panels()
+            return
+        await self.handle_prompt_text(text)
+
+    async def handle_prompt_text(self, text: str, recorded: bool = False) -> None:
+        if not recorded:
+            await self.add_message("user", text)
         try:
             await self.submit_command(text)
         except (ValueError, OSError, KeyError) as exc:
             await self.add_message("system", str(exc))
+
+    async def process_queued_input(self) -> None:
+        """Run one queued prompt when no job or modal screen is active."""
+        if self.processing_queue or self.busy or not self.queued_input or len(self.screen_stack) > 1:
+            return
+        self.processing_queue = True
+        item = self.queued_input.pop(0)
+        text = item["text"]
+        for message in self.session.messages:
+            if message.get("queue_id") == item["id"]:
+                message.pop("queue_id", None)
+                break
+        self.workspace.save_session(self.session)
+        self.refresh_panels()
+        try:
+            await self.handle_prompt_text(text, recorded=True)
+        finally:
+            self.processing_queue = False
 
     async def submit_command(self, text: str) -> None:
         if not text.startswith("/"):
@@ -486,7 +458,7 @@ class ForgeApp(App):
             if text in local:
                 await self.offer_plan(make_plan(self.workspace, self.settings, local[text], {}, self.selected))
             else:
-                self.start_chat(text)
+                await self.start_chat(text)
             return
         command, _, rest = text.partition(" ")
         rest = rest.strip()
@@ -685,29 +657,22 @@ class ForgeApp(App):
         if self.busy:
             raise ValueError("已有任务运行中。")
         self.busy = True
+        self.task_status_generation += 1
         self.started = time.monotonic()
         self.task_title = title
-        self.phase = "rtl"
         self.tail = []
         self.runner = ProcessRunner()
         self.job_directory = self.workspace.state / "jobs" / uuid.uuid4().hex[:12]
         self.job_directory.mkdir(parents=True)
-        self.query_one("#logs").display = True
         self.query_one("#logs", RichLog).clear()
-        self.query_one("#spinner").display = True
+        self.query_one("#task-status").display = True
         self.tick()
-        self.refresh_pipeline()
+        self.refresh_panels()
 
     def output(self, line: str) -> None:
         line = redact(line, self.environment())
         self.query_one("#logs", RichLog).write(Text(line))
         self.tail = (self.tail + [line])[-20:]
-        if "launch_runs syn_1" in line:
-            self.phase = "syn"
-            self.refresh_pipeline()
-        elif "launch_runs phy_1" in line:
-            self.phase = "route"
-            self.refresh_pipeline()
         if self.job_directory:
             log = self.job_directory / "output.log"
             if not log.exists() or log.stat().st_size < 4_000_000:
@@ -717,9 +682,17 @@ class ForgeApp(App):
     def finish_job(self, label: str) -> None:
         self.busy = False
         self.runner = None
-        self.query_one("#spinner").display = False
-        self.query_one("#task-status", Static).update(Text(label, style="#b9c6d5"))
+        self.task_status_generation += 1
+        generation = self.task_status_generation
+        widget = self.query_one("#task-status", Static)
+        widget.update(Text(f"✓ {label} · {time.monotonic() - self.started:.1f}s", style="#8998a9"))
+        widget.display = True
+        self.set_timer(2.5, lambda: self.clear_task_status(generation))
         self.refresh_panels()
+
+    def clear_task_status(self, generation: int) -> None:
+        if generation == self.task_status_generation and not self.busy:
+            self.query_one("#task-status").display = False
 
     def start_plan(self, plan: TaskPlan) -> None:
         self.begin_job(plan.title)
@@ -736,9 +709,6 @@ class ForgeApp(App):
                     code = 130
                     break
                 self.output(f"[{i+1}/{len(plan.commands)}] " + " ".join(command[:6]))
-                operation = command[4] if len(command) > 4 and command[3] == "fpga_agent" else ""
-                self.phase = {"verify": "sim", "flow": "sim", "cpu-suite": "sim", "td": "syn", "package": "package"}.get(operation, "rtl")
-                self.refresh_pipeline()
                 code = await runner.run(command, self.workspace.root, self.environment(), self.output)
                 if code:
                     break
@@ -760,11 +730,11 @@ class ForgeApp(App):
         except Exception as exc:
             await self.add_message("system", "任务失败：" + str(exc))
         finally:
-            self.finish_job("已取消" if runner.cancelled else "Ready · 任务已结束")
+            self.finish_job("已取消" if runner.cancelled else "任务已结束")
 
-    def start_chat(self, text: str) -> None:
+    async def start_chat(self, text: str) -> None:
         if not self.model_ready():
-            self.run_worker(self.add_message("assistant", "模型尚未连接。输入 `/connect` 配置 API Key 或本机 Codex CLI；`exchange` 只重放已有响应。\n\n已有工程可立即 `/verify`、`/flow` 或 `/replay --full`，这些命令不需要在线模型。"), exit_on_error=False)
+            await self.add_message("assistant", "模型尚未连接。输入 `/connect` 配置 API Key 或本机 Codex CLI；`exchange` 只重放已有响应。\n\n已有工程可立即 `/verify`、`/flow` 或 `/replay --full`，这些命令不需要在线模型。")
             return
         context = self.workspace.context(self.selected, text)
         def clean(value):
@@ -780,7 +750,7 @@ class ForgeApp(App):
         assert self.job_directory is not None
         request = {"workspace": str(self.workspace.root), "provider": self.settings.provider,
             "model": self.settings.model, "mode": self.settings.mode, "context": context,
-            "messages": self.session.messages[-16:]}
+            "messages": [message for message in self.session.messages[-16:] if not message.get("queue_id")]}
         write_json(self.job_directory / "request.json", request)
         self.run_worker(self.chat(request), group="task", exit_on_error=False)
 
@@ -812,7 +782,7 @@ class ForgeApp(App):
         except Exception as exc:
             await self.add_message("system", "无法使用该模型响应：" + str(exc))
         finally:
-            self.finish_job("Ready · 模型请求已结束")
+            self.finish_job("模型请求结束")
         if plan:
             self.start_plan(plan)
 
@@ -870,22 +840,6 @@ class ForgeApp(App):
 
     async def action_help(self) -> None:
         await self.add_message("assistant", HELP)
-
-    @on(Button.Pressed)
-    async def button(self, event: Button.Pressed) -> None:
-        commands = {"welcome-connect": "/connect", "welcome-project": "/project", "welcome-verify": "/verify", "quick-verify": "/verify", "quick-flow": "/flow"}
-        if self.busy:
-            self.notify("任务运行中。Esc 取消。", severity="warning")
-            return
-        if event.button.id == "new-project":
-            self.query_one("#prompt", Prompt).load_text("/init ")
-            self.query_one("#prompt").focus()
-        elif event.button.id in commands:
-            try:
-                await self.submit_command(commands[event.button.id])
-            except (ValueError, OSError) as exc:
-                await self.add_message("system", str(exc))
-
 
 def launch(workspace: str = ".", resume: str | None = None) -> int:
     if not sys.stdin.isatty() or not sys.stdout.isatty():
