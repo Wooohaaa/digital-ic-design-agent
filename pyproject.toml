@@ -9,6 +9,9 @@ description = "AI-assisted RTL to simulation and Anlogic TD implementation flow 
 requires-python = ">=3.11"
 dependencies = ["textual>=8.2.8,<9", "rich>=13.3.3,<16"]
 
+[project.optional-dependencies]
+tinyllm = ["numpy>=2,<3", "pyserial>=3.5,<4"]
+
 [project.scripts]
 fpga-agent = "fpga_agent.cli:main"
 icforge = "fpga_agent.cli:main"
