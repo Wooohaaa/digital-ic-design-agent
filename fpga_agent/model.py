@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import __version__
+
 
 SYSTEM_PROMPT = """You are an experienced FPGA RTL designer. Return only one JSON object with keys:
 top_module (Verilog module identifier), testbench_top (Verilog testbench module identifier), board_io (object mapping top-level port names to exact signal names from the board profile), design_spec (Markdown), files (object mapping relative paths to complete source text), checks (array of verification goals).
@@ -140,7 +142,14 @@ def _api_request(prompt: str, *, model: str, schema: dict[str, Any] | None, chat
     request = urllib.request.Request(
         endpoint,
         data=json.dumps(body).encode("utf-8"),
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            # Some API gateways sit behind Cloudflare and reject urllib's
+            # default ``Python-urllib/<version>`` signature with HTTP 403 / 1010.
+            # Identify this client truthfully instead of impersonating a browser.
+            "User-Agent": f"ICForge/{__version__} (OpenAI-compatible API client)",
+        },
         method="POST",
     )
     try:

@@ -58,7 +58,7 @@ Build 模式会执行用户请求对应的受支持工具。Plan 模式保留候
 
 熟悉 Claude Code、OpenCode、Hermes 等终端 agent 的用户，可以沿用“自然语言输入 + 斜杠命令 + 文件引用 + Plan/Build”的操作方式。已有 `AGENTS.md`、`CLAUDE.md`、`GEMINI.md` 会在工作区和当前工程中读取，作为模型的项目上下文，不会执行其中的 shell 代码。
 
-沿用已有的 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 环境变量即可接入 OpenAI Responses 接口；兼容 Chat Completions 的部署在 `/connect` 中选择 `chat`。所选接口需要支持 agent 使用的结构化 JSON 输出。`codex` 会使用本机已安装 Codex CLI 的登录状态；模型名必须是该账户实际支持的型号，本机此前对 gpt-6-luna 的 CLI 调用返回 model_not_found。不要把 CLI 登录支持和 API 模型权限混为一谈。
+沿用已有的 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 环境变量即可接入 OpenAI Responses 接口；兼容 Chat Completions 的部署在 `/connect` 中选择 `chat`。所选接口需要支持 agent 使用的结构化 JSON 输出。对于只提供 `/v1/chat/completions` 的服务，必须选 `chat`，否则 `api` 会错误请求 `/v1/responses`。IC Forge 会发送自己的 User-Agent，避免部分 Cloudflare 网关将 Python 默认客户端识别为浏览器签名并返回 403 / 1010。`codex` 会使用本机已安装 Codex CLI 的登录状态；模型名必须是该账户实际支持的型号，本机此前对 gpt-6-luna 的 CLI 调用返回 model_not_found。不要把 CLI 登录支持和 API 模型权限混为一谈。
 
 不会自动读取其它 agent 的私有凭据或会话数据库；本版不提供 Claude、Hermes、OpenCode 私有会话格式的导入，也没有通用终端 shell / MCP 工具执行器。模型能调用的操作被限定在下述 IC 流程中，返回的文本不会当作 shell 或 Tcl 执行。
 
