@@ -11,6 +11,7 @@ dependencies = ["textual>=8.2.8,<9", "rich>=13.3.3,<16"]
 
 [project.scripts]
 fpga-agent = "fpga_agent.cli:main"
+icforge = "fpga_agent.cli:main"
 ic-forge = "fpga_agent.cli:main"
 
 [tool.setuptools]
