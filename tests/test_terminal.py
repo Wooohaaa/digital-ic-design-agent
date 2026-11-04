@@ -1,5 +1,6 @@
 import asyncio
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -54,6 +55,18 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_redaction(self):
         self.assertEqual(redact("key=test-password", {"OPENAI_API_KEY": "test-password"}), "key=[redacted]")
+
+    def test_source_excerpts_expose_full_file_hash_and_truncation(self):
+        project=self.workspace.root/'indexed'
+        (project/'rtl').mkdir(parents=True)
+        path=project/'rtl/core.v'
+        path.write_text('wire x;\n'*3000+'// tail-only-marker',encoding='utf-8')
+        write_json(project/'project.json',{'project':'indexed','rtl_sources':['rtl/core.v'],'testbench_sources':[]})
+        context=self.workspace.context(project)
+        index=context['source_index']['rtl/core.v']
+        self.assertTrue(index['truncated'])
+        self.assertEqual(index['sha256'],hashlib.sha256(path.read_bytes()).hexdigest())
+        self.assertNotIn('tail-only-marker',context['sources']['rtl/core.v'])
 
     def test_atomic_checkpoints_remain_readable_during_concurrent_updates(self):
         path = self.workspace.state/'checkpoint.json'

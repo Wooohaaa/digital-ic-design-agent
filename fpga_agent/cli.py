@@ -374,6 +374,8 @@ def parser() -> argparse.ArgumentParser:
     suite.add_argument('--full',action='store_true')
     from .autonomy import configure_parser
     configure_parser(commands)
+    from .knowledge import configure_parser as knowledge_parser
+    knowledge_parser(commands)
     return root
 
 
@@ -385,6 +387,9 @@ def main(argv: list[str] | None = None) -> int:
         argv.insert(0, "tui")
     args = parser().parse_args(argv)
     try:
+        if args.command == 'knowledge':
+            from .knowledge import dispatch
+            return dispatch(args)
         if args.command == "task":
             from .autonomy import dispatch
             return dispatch(args)

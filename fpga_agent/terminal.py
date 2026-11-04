@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import codecs
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,9 @@ COMMANDS = {
     "/tasks": "查看长期任务：/tasks [ID]", "/pause": "暂停长期任务",
     "/continue": "恢复长期任务", "/stop": "取消长期任务",
     "/steer": "补充长期任务要求：/steer ID 内容",
+    "/skills": "查看兼容技能目录", "/skill": "预览技能：/skill 名称或完整 ID",
+    "/recall": "检索历史任务或步骤：/recall 词语 / ID:步数",
+    "/context": "查看长期任务上下文预算与裁剪记录",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
     "/export": "导出 Markdown 会话", "/cancel": "取消当前任务", "/quit": "退出",
 }
@@ -183,7 +187,7 @@ class Workspace:
             for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
                 path = self.resolve(name, base=directory)
                 if path.is_file() and path.stat().st_size < 64000:
-                    instructions[path.relative_to(self.root).as_posix()] = path.read_text(encoding="utf-8", errors="replace")[:12000]
+                    instructions[path.relative_to(self.root).as_posix()] = path.read_text(encoding="utf-8", errors="replace")
         result["project_instructions"] = instructions
         if project:
             result["project"] = project.relative_to(self.root).as_posix()
@@ -195,16 +199,30 @@ class Workspace:
             except (OSError,ValueError,KeyError,TypeError) as exc:
                 result['engineering_review'] = {'status':'blocked','reason':str(exc)}
             sources = {}
+            source_index = {}
             manifest = result["manifest"]
             names = list(manifest.get("rtl_sources", [])) + ["spec/brief.md", "spec/design.md"]
             budget = 36000
-            for name in names:
+            for name in names[:128]:
                 path = self.resolve(name, base=project)
-                if path.is_file() and budget > 0:
-                    content = path.read_text(encoding="utf-8", errors="replace")[:min(12000, budget)]
-                    sources[name] = content
-                    budget -= len(content)
+                if path.is_file():
+                    if path.stat().st_size > 2_000_000:
+                        source_index[name] = {'path':path.relative_to(self.root).as_posix(), 'size_bytes':path.stat().st_size,
+                            'mtime_ns':path.stat().st_mtime_ns,'excerpt_chars':0,'truncated':True,
+                            'note':'大文件未自动载入，使用 inspect/search 按需读取。'}
+                        continue
+                    raw = path.read_bytes()
+                    text_content = raw.decode('utf-8', errors='replace')
+                    content = text_content[:max(0,min(12000,budget))]
+                    source_index[name] = {'path':path.relative_to(self.root).as_posix(),
+                        'sha256':hashlib.sha256(raw).hexdigest(), 'total_chars':len(text_content),
+                        'excerpt_chars':len(content),'truncated':len(content)<len(text_content)}
+                    if content:
+                        sources[name] = content
+                        budget -= len(content)
             result["sources"] = sources
+            result["source_index"] = source_index
+            result['source_index_scope'] = {'total':len(names),'max_indexed':128,'bounded':len(names)>128}
         attached = {}
         for match in re.finditer(r'@(?:"([^"]+)"|([^\s]+))', text):
             value = match.group(1) or match.group(2)
@@ -217,6 +235,8 @@ class Workspace:
                 raise ValueError("一次最多附加 8 个文件。")
             attached[value] = path.read_text(encoding="utf-8", errors="strict")
         result["attachments"] = attached
+        from .knowledge import SkillCatalog
+        result['skill_catalog'] = SkillCatalog(self,project).summary()
         return result
 
     def files(self, project: Path | None) -> list[Path]:

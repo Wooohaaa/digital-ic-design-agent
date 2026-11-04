@@ -42,6 +42,24 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
             await app.submit_command('/auto off')
             self.assertEqual(app.workspace.settings().autonomy, 'manual')
 
+    async def test_skills_recall_and_context_commands_render_without_starting_work(self):
+        from fpga_agent.autonomy import TaskStore
+        app=ForgeApp(self.root)
+        async with app.run_test(size=(120,42)):
+            store=TaskStore(app.workspace)
+            task=store.create('RV32I benchmark memory')
+            task.update(status='paused',context_budget={'method':'JSON characters','after_chars':1234})
+            store.save(task)
+            await app.submit_command('/skills')
+            await app.submit_command('/skill bundled/rv32-validation')
+            await app.submit_command('/recall RV32I')
+            await app.submit_command('/context')
+            text='\n'.join(m['content'] for m in app.session.messages)
+            self.assertIn('RV32I independent verification',text)
+            self.assertIn('historical_only',text)
+            self.assertIn('1234',text)
+            self.assertFalse(app.busy)
+
     async def test_background_task_accepts_steering_and_blocks_overlapping_tools(self):
         from fpga_agent.autonomy import Lease, TaskStore
         from fpga_agent.terminal import write_json
@@ -72,7 +90,7 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
                 cancelled = False
                 async def run(self, *args):
                     write_json(directory/'response.json', {'message':'设计 FIFO', 'action':'design',
-                        'arguments':{'project':'fifo','brief':'FIFO','full':True}})
+                        'arguments':{'project':'fifo','brief':'FIFO depth=16 width=32，保留同步复位要求','full':True}})
                     return 0
 
             app.runner = Runner()
@@ -80,8 +98,28 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
                 await app.chat({'mode':'build','messages':[{'role':'user','content':'设计 FIFO 并完整交付'}]})
                 argv = start.call_args[0][0].commands[0]
                 self.assertEqual(argv[4:6], ['task','start'])
-                self.assertIn('设计 FIFO 并完整交付', argv)
+                self.assertIn('设计 FIFO 并完整交付', argv[6])
+                self.assertIn('depth=16 width=32',argv[6])
                 self.assertEqual(argv[argv.index('--target')+1], 'delivery')
+
+    async def test_failed_autonomous_handoff_never_falls_back_to_executing_the_old_plan(self):
+        from fpga_agent.terminal import write_json
+        app=ForgeApp(self.root)
+        async with app.run_test(size=(110,40)):
+            app.begin_job('oversized handoff fixture')
+            directory=app.job_directory
+            class Runner:
+                cancelled=False
+                async def run(self,*args):
+                    write_json(directory/'response.json',{'message':'candidate','action':'design',
+                        'arguments':{'project':'fifo','brief':'b'*60000,'full':True}})
+                    return 0
+            app.runner=Runner()
+            with patch.object(app,'start_plan') as start:
+                await app.chat({'mode':'build','messages':[{'role':'user','content':'按讨论的规格继续设计并交付'}]})
+                start.assert_not_called()
+            self.assertFalse((self.root/'fifo').exists())
+            self.assertTrue(any('60,000' in m['content'] for m in app.session.messages))
 
     async def test_keyboard_palette_history_multiline_and_responsive_layout(self):
         app = ForgeApp(self.root)

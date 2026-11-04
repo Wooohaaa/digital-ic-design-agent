@@ -18,8 +18,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .terminal import ProcessRunner, Settings, Workspace, evidence, make_plan, read_json, redact, timestamp, write_json
+from .context_budget import ContextBudgetError, pack_context, size
+from .knowledge import READ_ACTIONS, execute_read
 
 TERMINAL = {"completed", "cancelled"}
+TASK_LOG_BYTES = 20_000_000
+STEP_LOG_BYTES = 4_000_000
 
 
 def pid_alive(pid: int) -> bool:
@@ -163,7 +167,7 @@ class TaskStore:
 
     def create(self, objective: str, *, project: str = "", target: str = "delivery",
                settings: Settings | None = None, max_steps: int = 64,
-               max_hours: float = 24, max_failures: int = 3) -> dict:
+               max_hours: float = 24, max_failures: int = 3, context_chars: int = 96000) -> dict:
         if not isinstance(objective, str) or not objective.strip() or len(objective) > 60000:
             raise ValueError("任务目标不能为空，且不能超过 60,000 字符。")
         if target not in {"simulation", "delivery"}:
@@ -174,6 +178,8 @@ class TaskStore:
             raise ValueError("max_hours 必须大于 0 且不超过 720。")
         if type(max_failures) is not int or not 1 <= max_failures <= 10:
             raise ValueError("max_failures 必须为 1..10。")
+        if type(context_chars) is not int or not 16000 <= context_chars <= 2_000_000:
+            raise ValueError("context_chars 必须为 16,000..2,000,000。")
         settings = settings or self.workspace.settings()
         if settings.provider not in {"api", "chat", "codex"}:
             raise ValueError("长期任务需要 api、chat 或 codex 实时模型后端；exchange 用于单次响应导入。")
@@ -181,9 +187,9 @@ class TaskStore:
         task = {"version": 1, "id": uuid.uuid4().hex[:12], "objective": objective.strip(),
                 "project": project, "projects": [project] if project else [], "target": target, "settings": asdict(settings),
                 "status": "queued", "reason": "等待 worker", "created_at": timestamp(),
-                "limits": {"steps": max_steps, "seconds": max_hours * 3600, "failures": max_failures},
+                "limits": {"steps": max_steps, "seconds": max_hours * 3600, "failures": max_failures, "context_chars":context_chars},
                 "iterations": 0, "elapsed_seconds": 0.0, "steps": [], "plan": [], "steering": [],
-                "planner_failures": 0, "memory": ""}
+                "planner_failures": 0, "memory": "", "loaded_skills": []}
         self.save(task)
         return task
 
@@ -215,12 +221,12 @@ class TaskStore:
                    {"message": clean(message), "created_at": timestamp()})
 
     def launch(self, task_id: str, env: dict | None = None, *, extra_steps: int = 0,
-               extra_hours: float = 0) -> dict:
+               extra_hours: float = 0, context_chars: int | None = None) -> dict:
         with Lease(self.workspace.state / "task-launch.lock"):
-            return self._launch(task_id, env, extra_steps=extra_steps, extra_hours=extra_hours)
+            return self._launch(task_id, env, extra_steps=extra_steps, extra_hours=extra_hours, context_chars=context_chars)
 
     def _launch(self, task_id: str, env: dict | None = None, *, extra_steps: int = 0,
-                extra_hours: float = 0) -> dict:
+                extra_hours: float = 0, context_chars: int | None = None) -> dict:
         if self.busy():
             raise ValueError("当前工作区已有长期任务运行。")
         task = self.get(task_id)
@@ -230,6 +236,10 @@ class TaskStore:
             raise ValueError("追加预算必须为非负数。")
         if pid_alive(task.get("child_pid")):
             raise ValueError(f"中断前的工具子进程 {task['child_pid']} 仍运行，不能重叠执行。")
+        if context_chars is not None:
+            if type(context_chars) is not int or not 16000 <= context_chars <= 2_000_000:
+                raise ValueError("context_chars 必须为 16,000..2,000,000。")
+            task['limits']['context_chars'] = context_chars
         task["limits"]["steps"] += extra_steps
         task["limits"]["seconds"] += extra_hours * 3600
         if task["iterations"] >= task["limits"]["steps"] or task["elapsed_seconds"] >= task["limits"]["seconds"]:
@@ -352,9 +362,23 @@ class TaskEngine:
         line = redact(line, dict(os.environ))
         self.tail = "\n".join(self.tail + [line])[-8000:].splitlines()[-20:]
         log = self.directory / "output.log"
-        if not log.exists() or log.stat().st_size < 20_000_000:
+        if not log.exists() or log.stat().st_size < TASK_LOG_BYTES:
             with log.open("a", encoding="utf-8") as stream:
                 stream.write(line + "\n")
+        elif not self.task.get('output_log_truncated'):
+            self.task['output_log_truncated'] = True
+            with log.open('a',encoding='utf-8') as stream:
+                stream.write('\n[ICFORGE_LOG_LIMIT] 汇总日志达到上限；后续输出查看各步骤日志或工具原生报告。\n')
+        if self.task['iterations']:
+            step_log = self.directory/f"step-{self.task['iterations']:04d}"/'output.log'
+            step_log.parent.mkdir(exist_ok=True)
+            if not step_log.exists() or step_log.stat().st_size < STEP_LOG_BYTES:
+                with step_log.open('a',encoding='utf-8') as stream:
+                    stream.write(line+'\n')
+            elif self.task['steps'] and not self.task['steps'][-1].get('log_truncated'):
+                self.task['steps'][-1]['log_truncated'] = True
+                with step_log.open('a',encoding='utf-8') as stream:
+                    stream.write('\n[ICFORGE_LOG_LIMIT] 步骤日志达到上限；最终输出尾部仍保存在 result.json。\n')
 
     def stop_reason(self):
         control = read_json(self.directory / "control.json", {})
@@ -404,7 +428,7 @@ class TaskEngine:
             path.unlink(missing_ok=True)
         history = []
         for step in self.task["steps"][-8:]:
-            compact = {k: step[k] for k in ("iteration", "status", "exit_code", "reason") if k in step}
+            compact = {k: step[k] for k in ("iteration", "status", "exit_code", "reason", "log_truncated") if k in step}
             compact["output_tail"] = ["\n".join(step.get("output_tail", []))[-8000:]]
             if step.get("decision"):
                 compact["action"] = step["decision"].get("action")
@@ -415,6 +439,17 @@ class TaskEngine:
                        history=history, remaining_iterations=self.task["limits"]["steps"] - self.task["iterations"])
         context["task_projects"] = [{"project": name, "evidence": evidence(self.workspace.resolve(name))}
                                     for name in self.task.get("projects", [])]
+        current_skills = {item['id']:item['sha256'] for item in context.get('skill_catalog',{}).get('skills',[])}
+        context['loaded_skills'] = [item if current_skills.get(item['id'])==item['sha256'] else
+            {'id':item['id'],'sha256':item['sha256'],'current_sha256':current_skills.get(item['id']),
+             'stale':True,'note':'技能内容已变化或消失，请重新加载后使用。'} for item in self.task.get('loaded_skills',[])]
+        if self.task['steps']:
+            previous = self.task['steps'][-1]
+            context['last_observation'] = previous.get('observation', {key:previous[key] for key in ('iteration','status','exit_code','output_tail','log_truncated') if key in previous})
+            if previous.get('decision',{}).get('action') == 'skill' and previous.get('observation',{}).get('id') in {item['id'] for item in self.task.get('loaded_skills',[])}:
+                context['last_observation'] = {key:previous['observation'][key] for key in ('id','sha256','source') if key in previous['observation']}
+        context['experience_catalog'] = [{key:task.get(key) for key in ('id','status','updated_at')}
+            | {'objective':task.get('objective','')[:200]} for task in self.store.list()[:6] if task['id']!=self.task['id']]
         return clean(context)
 
     async def run(self):
@@ -425,6 +460,7 @@ class TaskEngine:
             for step in self.task["steps"]:
                 if step["status"] in {"planning", "running"}:
                     step.update(status="interrupted", reason="前一个 worker 中断，需重新检查证据。")
+                    self.save_step(step)
             self.task.update(status="running", reason="持续执行中", pid=os.getpid())
             self.save()
             self.event("started")
@@ -436,11 +472,22 @@ class TaskEngine:
                 if self.task["iterations"] >= self.task["limits"]["steps"]:
                     self.task.update(status="limited", reason="决策步数预算已用尽。")
                     break
-                context = self.context()
+                original_context = self.context()
+                try:
+                    context, report = pack_context(original_context, self.task['limits'].get('context_chars',96000))
+                except ContextBudgetError as exc:
+                    self.task.update(status='blocked',reason=str(exc),context_budget={'error':str(exc),
+                        'limit_chars':self.task['limits'].get('context_chars',96000),'before_chars':size(original_context)})
+                    write_json(self.directory/'context-budget.json',self.task['context_budget'])
+                    break
+                self.task['context_budget'] = report
+                write_json(self.directory/'context-budget.json',report)
                 self.task["iterations"] += 1
                 iteration = self.task["iterations"]
                 directory = self.directory / f"step-{iteration:04d}"
                 directory.mkdir(exist_ok=True)
+                if report['compacted']:
+                    write_json(directory/'context-full.json',original_context)
                 request = directory / "request.json"
                 write_json(request, {"workspace": str(self.workspace.root), "provider": self.task["settings"]["provider"],
                                      "model": self.task["settings"]["model"], "context": context})
@@ -455,6 +502,12 @@ class TaskEngine:
                 payload = read_json(directory / "decision.json") if code == 0 else None
                 try:
                     if code:
+                        detail = '\n'.join(self.tail)
+                        budget = self.task['limits'].get('context_chars',96000)
+                        if re.search(r'context_length_exceeded|prompt_too_long|prompt (?:is )?too long|maximum context length|context window exceeded|too many input tokens',detail,re.I) and budget > 16000:
+                            self.task['limits']['context_chars'] = max(16000,int(budget*0.7))
+                            step['adjusted_context_chars'] = self.task['limits']['context_chars']
+                            self.event('context_reduced',reason='provider reported context overflow',previous=budget,current=self.task['limits']['context_chars'])
                         raise ValueError("模型请求失败：" + "\n".join(self.tail[-3:])[:2000])
                     if not isinstance(payload, dict) or payload.get("decision") not in {"execute", "complete", "blocked"}:
                         raise ValueError("模型未返回有效的长期任务决策。")
@@ -482,8 +535,11 @@ class TaskEngine:
                         raise ValueError("完成声明被验收门禁拒绝：" + reason)
                     selected = self.workspace.resolve(self.task["project"]) if self.task["project"] else None
                     settings = Settings(**self.task["settings"])
-                    plan = make_plan(self.workspace, settings, payload["action"], payload["arguments"], selected)
-                    if plan.project:
+                    local_read = payload['action'] in READ_ACTIONS
+                    if not isinstance(payload.get('arguments'),dict):
+                        raise ValueError('工具参数必须为对象。')
+                    plan = None if local_read else make_plan(self.workspace, settings, payload["action"], payload["arguments"], selected)
+                    if plan and plan.project:
                         self.task["project"] = plan.project.relative_to(self.workspace.root).as_posix()
                         if self.task["project"] not in self.task.setdefault("projects", []):
                             self.task["projects"].append(self.task["project"])
@@ -492,7 +548,7 @@ class TaskEngine:
                             name = path.parent.relative_to(self.workspace.root).as_posix()
                             if name not in self.task.setdefault("projects", []):
                                 self.task["projects"].append(name)
-                    stable = {key: context.get(key) for key in ("sources", "manifest", "evidence")}
+                    stable = {key: original_context.get(key) for key in ("source_index", "manifest", "evidence")}
                     fingerprint = hashlib.sha256(json.dumps([payload["action"], payload["arguments"], stable], sort_keys=True).encode()).hexdigest()
                     step["fingerprint"] = fingerprint
                     previous = [s for s in self.task["steps"][:-1] if s["iteration"] > self.task.get("resume_iteration", 0)]
@@ -503,15 +559,30 @@ class TaskEngine:
                     self.task["planner_failures"] = 0
                     self.tail = []
                     self.event("tool_started", iteration=iteration, action=payload["action"])
-                    for index, argv in enumerate(plan.commands):
-                        step["command_index"] = index
-                        self.save()
-                        code = await self.command(argv)
-                        step.update(exit_code=code, output_tail=self.tail)
-                        if self.stop_reason() or code:
-                            break
-                        step["completed_commands"] = index + 1
-                        self.save()
+                    if local_read:
+                        result = execute_read(self.workspace, selected, payload['action'], payload['arguments'], task_id=self.task['id'])
+                        if payload['action'] == 'skill' and result.get('content') and not result.get('resource'):
+                            loaded = self.task.setdefault('loaded_skills', [])
+                            self.task['loaded_skills'] = [item for item in loaded if item['id']!=result['id']] + [result]
+                        if payload['action'] == 'unload-skill':
+                            loaded = self.task.get('loaded_skills', [])
+                            if result['unload'] not in {item['id'] for item in loaded}:
+                                raise ValueError('该技能尚未加载，请指定已加载技能的完整 ID。')
+                            self.task['loaded_skills'] = [item for item in loaded if item['id']!=result['unload']]
+                        step['observation'] = clean(result)
+                        self.output(json.dumps(clean(result),ensure_ascii=False))
+                        code = 0
+                        step.update(exit_code=0, output_tail=self.tail)
+                    else:
+                        for index, argv in enumerate(plan.commands):
+                            step["command_index"] = index
+                            self.save()
+                            code = await self.command(argv)
+                            step.update(exit_code=code, output_tail=self.tail)
+                            if self.stop_reason() or code:
+                                break
+                            step["completed_commands"] = index + 1
+                            self.save()
                     step["status"] = "interrupted" if self.stop_reason() else "succeeded" if code == 0 else "failed"
                     self.event("tool_finished", iteration=iteration, status=step["status"], exit_code=code)
                 except (ValueError, KeyError, TypeError, OSError) as exc:
@@ -556,7 +627,8 @@ def configure_parser(commands):
     start.add_argument("--max-steps", type=int, default=64)
     start.add_argument("--max-hours", type=float, default=24)
     start.add_argument("--max-failures", type=int, default=3)
-    for name in ("list", "status", "logs", "pause", "resume", "cancel", "steer"):
+    start.add_argument('--context-chars',type=int,default=96000)
+    for name in ("list", "status", "logs", "context", "pause", "resume", "cancel", "steer"):
         parser = sub.add_parser(name)
         parser.add_argument("--workspace", default=".")
         if name != "list":
@@ -565,6 +637,7 @@ def configure_parser(commands):
             parser.add_argument("--extra-steps", type=int, default=0)
             parser.add_argument("--extra-hours", type=float, default=0)
             parser.add_argument("--use-current-model", action="store_true")
+            parser.add_argument('--context-chars',type=int)
         if name == "steer":
             parser.add_argument("message")
 
@@ -581,7 +654,7 @@ def dispatch(args) -> int:
         if args.model:
             settings.model = args.model
         task = store.create(args.objective, project=args.project or settings.project, target=args.target, settings=settings,
-                            max_steps=args.max_steps, max_hours=args.max_hours, max_failures=args.max_failures)
+                            max_steps=args.max_steps, max_hours=args.max_hours, max_failures=args.max_failures, context_chars=args.context_chars)
         result = store.launch(task["id"])
     elif name == "list":
         result = [{key: task.get(key) for key in ("id", "objective", "status", "reason", "project", "iterations", "elapsed_seconds")}
@@ -596,7 +669,7 @@ def dispatch(args) -> int:
                 raise ValueError("持续任务需要实时模型后端。")
             task["settings"] = asdict(settings)
             store.save(task)
-        result = store.launch(args.task_id, extra_steps=args.extra_steps, extra_hours=args.extra_hours)
+        result = store.launch(args.task_id, extra_steps=args.extra_steps, extra_hours=args.extra_hours, context_chars=args.context_chars)
     elif name in {"pause", "cancel"}:
         result = store.control(args.task_id, name)
         result["requested_action"] = name
@@ -611,6 +684,8 @@ def dispatch(args) -> int:
                 stream.seek(max(0, path.stat().st_size - 32000))
                 print(stream.read().decode("utf-8", errors="replace"))
         return 0
+    elif name == 'context':
+        result = store.get(args.task_id).get('context_budget',{'note':'该任务尚未发送规划请求。'})
     else:
         result = store.get(args.task_id)
     print(json.dumps(clean(result), ensure_ascii=False, indent=2))

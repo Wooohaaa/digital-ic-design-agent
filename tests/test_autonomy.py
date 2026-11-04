@@ -127,6 +127,69 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(read_json(directory/'step-0001/result.json')['iteration'],1)
         self.assertEqual(result['memory'], '保留验证要求')
 
+    async def test_context_overflow_blocks_before_model_call_and_preserves_original_goal(self):
+        task=self.store.create('要求'*10000,context_chars=16000)
+        engine=ScriptedEngine(self.store,task['id'],[])
+        result=await engine.run()
+        self.assertEqual(result['status'],'blocked')
+        self.assertEqual(result['iterations'],0)
+        self.assertEqual(result['objective'],'要求'*10000)
+        self.assertIn('context-chars',result['reason'])
+
+    async def test_read_tools_load_and_unload_skills_without_spawning_a_tool_process(self):
+        (self.workspace.root/'core.v').write_text('module x; endmodule')
+        choices=[decision('inspect',path='core.v'),decision('skill',query='bundled/rv32-validation'),
+                 decision('unload-skill',query='bundled/rv32-validation'),decision('none','blocked')]
+        task=self.create()
+        engine=ScriptedEngine(self.store,task['id'],choices)
+        result=await engine.run()
+        self.assertEqual(engine.tool_calls,0)
+        self.assertEqual(result['steps'][0]['observation']['path'],'core.v')
+        self.assertEqual(result['loaded_skills'],[])
+        directory=self.store.directory(task['id'])
+        third=read_json(directory/'step-0003/request.json')['context']
+        self.assertEqual(third['loaded_skills'][0]['id'],'bundled/rv32-validation')
+        self.assertTrue((directory/'step-0001/output.log').exists())
+
+    async def test_changed_skill_is_marked_stale_instead_of_reusing_an_old_body(self):
+        from fpga_agent.knowledge import SkillCatalog
+        path=self.workspace.root/'.agents/skills/example/SKILL.md'
+        path.parent.mkdir(parents=True)
+        path.write_text('---\nname: example\ndescription: test\n---\noriginal-procedure')
+        task=self.create()
+        task['loaded_skills']=[SkillCatalog(self.workspace).load('workspace/.agents/example')]
+        self.store.save(task)
+        path.write_text('---\nname: example\ndescription: test\n---\nchanged-procedure')
+        context=TaskEngine(self.store,task['id']).context()
+        self.assertTrue(context['loaded_skills'][0]['stale'])
+        self.assertNotIn('content',context['loaded_skills'][0])
+
+    async def test_log_limits_are_explicit_and_keep_the_latest_output_tail(self):
+        task=self.create()
+        engine=TaskEngine(self.store,task['id'])
+        engine.task.update(iterations=1,steps=[{'iteration':1,'status':'running'}])
+        with patch('fpga_agent.autonomy.TASK_LOG_BYTES',10),patch('fpga_agent.autonomy.STEP_LOG_BYTES',10):
+            engine.output('first long line that fills the log')
+            engine.output('last observed error')
+            engine.output('final output')
+        self.assertTrue(engine.task['steps'][0]['log_truncated'])
+        self.assertIn('final output',engine.tail)
+        log=(engine.directory/'step-0001/output.log').read_text(encoding='utf-8')
+        self.assertEqual(log.count('ICFORGE_LOG_LIMIT'),1)
+
+    async def test_provider_context_overflow_reduces_input_budget_with_bounded_retry(self):
+        task=self.create(max_steps=3)
+        class OverflowEngine(ScriptedEngine):
+            async def command(inner,argv):
+                if inner.task['iterations']==1:
+                    inner.output('HTTP 400 context_length_exceeded: prompt too long')
+                    return 1
+                return await super(OverflowEngine,inner).command(argv)
+        result=await OverflowEngine(self.store,task['id'],[decision('none','blocked')]).run()
+        self.assertEqual(result['limits']['context_chars'],67200)
+        self.assertEqual(result['steps'][0]['status'],'failed')
+        self.assertEqual(result['iterations'],2)
+
     async def test_invalid_tool_never_executes_arbitrary_model_command(self):
         task = self.create(max_failures=1)
         engine = ScriptedEngine(self.store, task["id"], [decision("shell")])
@@ -225,12 +288,14 @@ class DetachedTaskIntegrationTests(unittest.TestCase):
         if not shutil.which("iverilog") and not local.is_file():
             self.skipTest("Icarus required for real verification")
         calls = []
-        choices = [decision(), decision("verify"), decision("none", "complete")]
+        choices = [decision(), decision('skill',query='bundled/hx1p35a-delivery'),
+            decision('inspect',path='project.json'),decision('search',query='module',path='rtl'),
+            decision('recall',query='demo'), decision("verify"), decision("none", "complete")]
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 calls.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
-                body = json.dumps({"output_text": json.dumps(choices[min(len(calls)-1, 2)])}).encode()
+                body = json.dumps({"output_text": json.dumps(choices[min(len(calls)-1, len(choices)-1)])}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -263,10 +328,11 @@ class DetachedTaskIntegrationTests(unittest.TestCase):
                         break
                     time.sleep(0.05)
                 self.assertEqual(result["status"], "completed", result)
-                self.assertEqual(len(calls), 3)
-                self.assertEqual(result["iterations"], 3)
+                self.assertEqual(len(calls), 7)
+                self.assertEqual(result["iterations"], 7)
                 self.assertTrue(completion_gate(store.workspace, result)[0])
                 self.assertIn('"exit_code": 0', json.dumps(calls[-1], ensure_ascii=False).replace('\\"', '"'))
+                self.assertIn('bundled/hx1p35a-delivery',json.dumps(calls[-1],ensure_ascii=False))
                 for path in store.workspace.state.rglob("*.json*"):
                     self.assertNotIn(secret, path.read_text(encoding="utf-8"))
             finally:

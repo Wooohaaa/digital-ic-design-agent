@@ -28,6 +28,8 @@ icforge task logs
 
 `/auto off` 切回单次工具模式。暂停/异常恢复会重新检查工程证据；每个工作区只允许一个持续任务。使用方式、验收门槛和测试边界见 [主动任务指南](docs/autonomous-tasks.md)。
 
+第二轮加入 `/skills` 技能发现、`/recall` 历史任务检索和 `/context` 上下文预算展示。支持直接发现 OpenCode、Claude、Command Code、Hermes 及 `.agents/skills` 的本地技能；planner 可按需读取完整源码、技能引用与归档日志。详见 [技能与上下文](docs/knowledge-context.md) 和 [开源 agent 对照与改进](docs/agent-comparison.md)。
+
 用于逐步积累数字 IC 设计能力的本地 agent。当前已实现模型生成/修复、独立 RISC-V 指令级验证、Anlogic TD 综合与布局布线、时序/产物验收和交付归档。
 
 本轮由 **gpt-6-luna** 生成了单周期、多周期、两级流水线三份 RV32I CPU。每份通过 114 个程序、18,099 条指令提交比对、片上 ROM/RAM 签名测试和 50 MHz TD 实现。实测表格见 [riscv-results.md](docs/riscv-results.md)，接口和覆盖范围见 [riscv-flow.md](docs/riscv-flow.md)。

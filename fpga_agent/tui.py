@@ -53,6 +53,9 @@ HELP = """### 在终端完成设计闭环
 | `/tasks [ID]` | 查看目标、计划、进度和停止原因 |
 | `/pause [ID]` · `/continue [ID]` · `/stop [ID]` | 暂停、恢复、取消长期任务 |
 | `/steer ID 内容` | 保存追加要求，下次决策前读取 |
+| `/skills` · `/skill 名称` | 查看兼容技能目录、预览技能正文 |
+| `/recall 词语或ID:步数` | 检索历史经验或归档步骤 |
+| `/context [任务ID]` | 查看规划上下文字符预算、各部分用量及裁剪记录 |
 | `/new` · `/resume` · `/export` | 会话管理与 Markdown 导出 |
 
 **Enter** 发送 · **Shift+Enter** 换行 · **Tab** 补全斜杠命令 · **↑/↓** 历史输入
@@ -515,7 +518,8 @@ class ForgeApp(App):
                 return
             allowed = {"/tasks", "/pause", "/stop", "/steer", "/status", "/help", "/?", "/connect",
                        "/theme", "/logo", "/model", "/provider", "/open", "/files", "/artifacts",
-                       "/export", "/diff", "/quit", "/exit", "/cancel", "/auto"}
+                       "/export", "/diff", "/quit", "/exit", "/cancel", "/auto",
+                       "/skills", "/skill", "/recall", "/context"}
             if text.partition(" ")[0] not in allowed:
                 raise ValueError("长期任务正在操作工作区。用 /pause 暂停，或直接输入补充要求。")
         if not text.startswith("/"):
@@ -554,6 +558,23 @@ class ForgeApp(App):
                 if task.get("completion_evidence"):
                     lines.append(task["completion_evidence"])
             await self.add_message("assistant", "\n\n".join(lines) or "暂无长期任务。用 /task 目标 启动。")
+        elif command in {'/skills','/skill','/recall','/context'}:
+            from .knowledge import SkillCatalog, recall
+            if command == '/context':
+                report = task_store.get(rest or 'latest').get('context_budget',{'note':'尚未发送规划请求。'})
+                await self.add_message('assistant','```json\n'+json.dumps(report,ensure_ascii=False,indent=2)+'\n```')
+            elif command == '/recall':
+                await self.add_message('assistant','```json\n'+json.dumps(recall(self.workspace,rest),ensure_ascii=False,indent=2)+'\n```')
+            else:
+                catalog = SkillCatalog(self.workspace,self.selected)
+                if command == '/skills':
+                    summary = catalog.summary()
+                    body = '\n'.join(f"- `{item['id']}` · {item['description'][:160]}" for item in summary['skills'][:40])
+                    body += f"\n\n共 {len(summary['skills'])} 个技能，{len(summary['issues'])} 个发现问题；/skill 完整ID 预览正文。"
+                    await self.add_message('assistant',body)
+                else:
+                    result = catalog.load(rest)
+                    await self.add_message('assistant',result.get('content') or '```json\n'+json.dumps(result,ensure_ascii=False,indent=2)+'\n```')
         elif command in ("/pause", "/stop", "/continue"):
             task_id = tokens[0] if tokens else "latest"
             if command == "/continue":
@@ -936,6 +957,11 @@ class ForgeApp(App):
                     plan = make_plan(self.workspace, self.settings, result["action"], result["arguments"], self.selected)
                     if self.settings.autonomy == "auto" and result["action"] in {"design", "cpu-design", "tinyllm", "flow"}:
                         objective = next((m["content"] for m in reversed(request["messages"]) if m.get("role") == "user"), "")
+                        brief = result['arguments'].get('brief','')
+                        if isinstance(brief,str) and brief.strip() and brief.strip() not in objective:
+                            objective += '\n\n会话中整理的设计需求：\n' + brief.strip()
+                        if len(objective)>60000:
+                            raise ValueError('会话需求超过 60,000 字符，请先整理到工程规格文件再启动长期任务。')
                         target = "delivery" if result["arguments"].get("full") or result["action"] == "flow" else "simulation"
                         plan = self.long_task_plan(objective, target, plan.project)
                         await self.add_message("system", "该设计请求将由后台长期任务持续推进，使用 /tasks 查看进度。")
@@ -947,6 +973,7 @@ class ForgeApp(App):
             await runner.cancel()
             raise
         except Exception as exc:
+            plan = None
             await self.add_message("system", "无法使用该模型响应：" + str(exc))
         finally:
             self.finish_job("模型请求结束")
@@ -971,6 +998,9 @@ class ForgeApp(App):
             self.long_task_seen[task_id] = marker
             if task["status"] in {"queued", "running"}:
                 active = f"task {task_id[:6]} · {task['iterations']}/{task['limits']['steps']}"
+                report = task.get('context_budget',{})
+                if report.get('after_chars'):
+                    active += f" · ctx {report['after_chars']:,} chars"
             if previous == marker or (previous is None and task["status"] not in {"queued", "running", "interrupted"}):
                 continue
             message = f"长期任务 `{task_id}` · **{task['status']}** · {task['iterations']}/{task['limits']['steps']} 步"
