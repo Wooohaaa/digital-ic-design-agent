@@ -10,6 +10,10 @@ icforge
 
 安装完成后，可在任意目录运行 `icforge` 启动 TUI；当前目录会作为默认工作区。
 
+## 终端界面
+
+![IC Forge TUI running in Windows PowerShell](docs/images/icforge-tui-powershell.png)
+
 在界面里用 `/connect` 连接模型，`/project` 选择工程，`/verify` 验证，`/flow` 完成实现交付。`Ctrl+P` 命令面板、`Ctrl+O` 文件搜索、`Shift+Tab` 切换 Plan / Build、`Esc` 取消任务。完整操作与迁移说明见 [终端工作台指南](docs/terminal.md)。已有 CLI 命令继续可用。
 
 用于逐步积累数字 IC 设计能力的本地 agent。当前已实现模型生成/修复、独立 RISC-V 指令级验证、Anlogic TD 综合与布局布线、时序/产物验收和交付归档。
