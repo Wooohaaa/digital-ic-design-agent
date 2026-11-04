@@ -250,7 +250,13 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="fpga-agent", description="HX1P35A Verilog 设计、仿真与安路 TD 实现 agent")
+    from . import __version__
+    root.add_argument("--version", action="version", version=__version__)
     commands = root.add_subparsers(dest="command", required=True)
+
+    tui = commands.add_parser("tui", help="打开 IC Forge 交互式终端工作台")
+    tui.add_argument("--workspace", default=".", help="工作区目录")
+    tui.add_argument("--resume", "--continue", "-c", nargs="?", const="latest", help="恢复会话 ID；省略 ID 恢复最近会话")
 
     init = commands.add_parser("init", help="创建 HX1P35A 示例或新设计工程")
     init.add_argument("project", help="工程目录名")
@@ -293,8 +299,20 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv:
+        argv = ["tui"]
+    elif argv[0] in ("--workspace", "--resume", "--continue", "-c"):
+        argv.insert(0, "tui")
     args = parser().parse_args(argv)
     try:
+        if args.command == "tui":
+            try:
+                from .tui import launch
+            except ImportError as exc:
+                print("TUI 依赖缺失，请运行 python -m pip install -e .：" + str(exc), file=sys.stderr)
+                return 2
+            return launch(args.workspace, args.resume)
         if args.command == "init":
             project = create_project(args.project, Path(args.directory) / args.project)
             print(f"已创建工程：{project}")

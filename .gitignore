@@ -13,6 +13,7 @@ dist/
 reports/
 deliverables/
 .tools/
+.fpga-agent/
 .agent-test-output.log
 **/td/runs/
 **/td/generated_flow.tcl

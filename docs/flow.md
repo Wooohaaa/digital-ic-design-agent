@@ -32,7 +32,7 @@
 
 ```powershell
 fpga-agent init <工程目录名>
-fpga-agent design <工程目录> --brief-file requirements.md --repair-rounds 2
+fpga-agent design <工程目录> --brief-file requirements.md --repair-rounds 2 --provider api --model gpt-6-luna
 fpga-agent verify <工程目录>
 fpga-agent td <工程目录> --stage synth
 fpga-agent td <工程目录> --stage full

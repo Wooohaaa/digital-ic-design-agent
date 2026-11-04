@@ -1,4 +1,16 @@
-# Digital IC Design Agent — HX1P35A
+# IC Forge — Digital IC Design Agent
+
+0.3 提供终端交互工作台：对话设计、工程切换、实时工具日志、验证证据、文件预览和可恢复会话。Python 3.11+ 安装后直接运行：
+
+```powershell
+python -m pip install -e .
+ic-forge
+# 或 python -m fpga_agent tui --workspace .
+```
+
+![IC Forge terminal workspace](docs/images/tui.png)
+
+在界面里用 `/connect` 连接模型，`/project` 选择工程，`/verify` 验证，`/flow` 完成实现交付。`Ctrl+P` 命令面板、`Ctrl+O` 文件搜索、`Shift+Tab` 切换 Plan / Build、`Esc` 取消任务。完整操作与迁移说明见 [终端工作台指南](docs/terminal.md)。已有 CLI 命令继续可用。
 
 用于逐步积累数字 IC 设计能力的本地 agent。当前已实现模型生成/修复、独立 RISC-V 指令级验证、Anlogic TD 综合与布局布线、时序/产物验收和交付归档。
 
@@ -15,7 +27,7 @@
 
 ## 环境
 
-Python 3.11+，无第三方 Python 运行依赖；Icarus Verilog 12+；Anlogic TD 6.2.x。当前本机 Icarus 位于 `.tools/icarus`，工具二进制不打入源码交付包。
+Python 3.11+，TUI 使用 Textual（安装时自动获取）；Icarus Verilog 12+；Anlogic TD 6.2.x。当前本机 Icarus 位于 `.tools/icarus`，工具二进制不打入源码交付包。
 
 ```powershell
 winget install --id Icarus.Verilog --exact
@@ -60,7 +72,7 @@ python -m fpga_agent flow my-design
 
 ## 交付内容与边界
 
-完整发布包（含安装 wheel、三份 CPU 工程交付包、验证记录和生成/修复审计）可从 [digital-ic-agent-v0.2.zip](deliverables/digital-ic-agent-v0.2.zip) 获取。
+完整发布包（含 TUI、安装 wheel、三份 CPU 工程交付包、验证记录和生成/修复审计）可从 [digital-ic-agent-v0.3.0.zip](deliverables/digital-ic-agent-v0.3.0.zip) 获取。0.2 原始发布包仍保留用于历史复现。
 
 归档内的三份工程分别在 `benchmarks/rv32_*/deliverables/`，包含 RTL、独立 testbench、约束、可移动 TD `.al` 工程、bitstream、时序/资源报告和验证记录。综合测试封装含片上 ROM/RAM 和提交签名序列化输出。
 

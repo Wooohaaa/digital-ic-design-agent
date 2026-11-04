@@ -1,0 +1,89 @@
+$forge-bg: #0b0e16;
+$forge-panel: #111622;
+$forge-raised: #182030;
+$forge-line: #263149;
+$forge-muted: #74819a;
+$forge-accent: #63ead5;
+$forge-violet: #b6a0fa;
+
+Screen { background: $forge-bg; color: #dbe2ef; }
+#topbar { height: 3; padding: 0 2; align: left middle; background: $forge-panel; border-bottom: solid $forge-line; }
+#brand { width: 1fr; content-align: left middle; }
+#connection-status { width: auto; max-width: 60; content-align: right middle; }
+#layout { height: 1fr; }
+#sidebar { width: 26; padding: 1 1; background: $forge-panel; border-right: solid $forge-line; }
+.section-title { color: $forge-muted; text-style: bold; height: 1; margin: 1 0; }
+#workspace-name { color: $forge-accent; height: 2; }
+#projects { height: 1fr; min-height: 4; background: transparent; border: none; padding: 0; }
+OptionList > .option-list--option-highlighted { background: $forge-raised; color: $forge-accent; }
+OptionList:focus { border: none; }
+#sidebar Button { width: 100%; height: 3; margin-top: 1; border: none; background: $forge-raised; color: #b7c1d6; text-align: left; }
+#sidebar Button:hover { background: #233446; color: $forge-accent; }
+#session-info { height: 3; margin-top: 2; }
+.muted { color: $forge-muted; height: auto; margin-top: 1; }
+#center { width: 1fr; min-width: 32; padding: 0 2; }
+#conversation-bar { height: 3; border-bottom: solid $forge-line; align: left middle; }
+#conversation-title { width: 1fr; color: $forge-muted; content-align: left middle; text-style: bold; }
+#project-badge { width: auto; content-align: right middle; }
+#transcript { height: 1fr; padding: 1 0; scrollbar-size: 1 1; }
+#welcome { height: auto; margin: 1 1 0 1; }
+#wordmark { color: $forge-accent; height: 3; text-style: bold; margin-bottom: 1; }
+#welcome-title { text-style: bold; color: #eef2fb; height: 2; }
+#welcome-subtitle { color: $forge-muted; height: 2; }
+#welcome-cards { height: 5; margin-top: 1; }
+#welcome-cards Button { width: 1fr; height: 5; margin-right: 1; background: $forge-panel; border: round $forge-line; color: $forge-violet; }
+#welcome-cards Button:hover { border: round $forge-accent; color: $forge-accent; }
+#welcome-note { margin: 1 0; color: #98a6bf; }
+.message { height: auto; margin: 0 0 1 0; padding: 1 2; background: $forge-panel; border-left: thick $forge-line; }
+.message.user { border-left: thick $forge-accent; background: #121e28; }
+.message.assistant { border-left: thick $forge-violet; }
+.message.tool { border-left: thick #efc884; background: #1c1c25; }
+.message.system { border-left: thick $forge-muted; }
+.role { height: 1; color: $forge-muted; text-style: bold; margin-bottom: 1; }
+.user .role { color: $forge-accent; }
+.assistant .role { color: $forge-violet; }
+.tool .role { color: #efc884; }
+Markdown { margin: 0; padding: 0; background: transparent; }
+MarkdownH3 { color: $forge-violet; }
+MarkdownFence { background: #0b101b; }
+#logs { height: 10; min-height: 4; border: round $forge-line; background: #080c13; padding: 0 1; scrollbar-size: 1 1; }
+#task-row { height: 2; align: left middle; }
+#spinner { width: 5; height: 1; color: $forge-accent; }
+#task-status { width: 1fr; color: $forge-muted; content-align: left middle; }
+#suggestions { height: auto; max-height: 5; padding: 0 2; background: $forge-panel; border-left: thick $forge-violet; }
+#composer { height: 7; border: round $forge-accent; padding: 0 1; background: $forge-panel; margin-bottom: 1; }
+#composer:focus-within { border: round $forge-accent; }
+#composer-bar { height: 1; }
+#mode { width: 27; }
+#input-hint { width: 1fr; color: $forge-muted; text-align: right; }
+#prompt { height: 4; min-height: 3; border: none; padding: 0; background: $forge-panel; }
+#prompt:focus { border: none; }
+TextArea > .text-area--cursor { background: $forge-accent; color: $forge-bg; }
+#inspector { width: 29; background: $forge-panel; padding: 1 2; border-left: solid $forge-line; }
+#evidence { height: auto; min-height: 5; margin-bottom: 1; }
+#pipeline { height: 10; color: #8292b0; }
+#tools { height: 4; }
+Footer { background: $forge-panel; color: $forge-muted; }
+FooterKey > .footer-key--key { background: $forge-raised; color: $forge-accent; }
+Screen.compact #inspector { display: none; }
+Screen.narrow #sidebar { display: none; }
+Screen.narrow #center { padding: 0 1; }
+Screen.narrow #input-hint { display: none; }
+Screen.narrow #brand { min-width: 12; }
+Screen.narrow #connection-status { max-width: 28; }
+Screen.narrow #welcome-cards { height: 4; }
+Screen.narrow #welcome-cards Button { height: 4; min-width: 8; margin-right: 0; }
+ModalScreen { align: center middle; background: #070b12 85%; }
+.dialog { width: 78; max-width: 95%; max-height: 90%; height: auto; padding: 1 2; border: round $forge-violet; background: $forge-panel; }
+.dialog-title { height: 2; color: $forge-accent; text-style: bold; }
+.dialog Input { background: $forge-bg; border: tall $forge-line; }
+.dialog Input:focus { border: tall $forge-accent; }
+#picker { height: 24; }
+#picker-options { height: 1fr; border: none; background: transparent; }
+#connection { height: auto; }
+#connection Label { margin-top: 1; height: 1; color: #a7b0c4; }
+#connection Select { margin: 0; }
+.dialog-buttons { height: 3; margin-top: 1; align: right middle; }
+.dialog-buttons Button { margin-left: 1; border: none; }
+#preview { width: 100; height: 90%; }
+#preview VerticalScroll { height: 1fr; }
