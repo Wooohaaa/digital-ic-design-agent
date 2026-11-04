@@ -10,7 +10,19 @@ icforge
 
 安装完成后，可在任意目录运行 `icforge` 启动 TUI；当前目录会作为默认工作区。
 
-![IC Forge terminal workspace](docs/images/tui.png)
+## 界面与 TinyStories 实板效果
+
+下面展示 IC Forge 的终端工作界面，以及 TinyStories260K 在 HX1P35A 上的实际运行与校验结果。完整工程、复现步骤和验收证据见 [TinyStories 工程试验](docs/tinystories-flow.md)。
+
+<p align="center">
+  <img src="docs/images/icforge-tinystories-tui.png" alt="IC Forge TUI 中执行 TinyStories260K 实板验收" width="100%">
+  <br><em>IC Forge TUI：TinyStories260K 工程会话与实板验收结果</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/tinystories-hx1p35a-result.png" alt="TinyStories260K 在 HX1P35A FPGA 开发板上的部署与推理结果" width="100%">
+  <br><em>HX1P35A 实测：Flash CRC 校验、1,536 个 logits 对比和板上生成结果</em>
+</p>
 
 在界面里用 `/connect` 连接模型，`/project` 选择工程，`/verify` 验证，`/flow` 完成实现交付。`Ctrl+P` 命令面板、`Ctrl+O` 文件搜索、`Shift+Tab` 切换 Plan / Build、`Esc` 取消任务。完整操作与迁移说明见 [终端工作台指南](docs/terminal.md)。已有 CLI 命令继续可用。
 

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#19212b" stroke-width="1"/></pattern></defs>
+<rect width="1600" height="1000" fill="#070a0f"/><rect width="1600" height="1000" fill="url(#grid)" opacity=".35"/>
+<rect x="38" y="38" width="1524" height="924" rx="22" fill="#090e15" stroke="#263440" stroke-width="2"/>
+<path d="M70 116H1530" stroke="#263440"/>
+<text x="82" y="91" fill="#ffd21f" font-family="Arial,sans-serif" font-size="27" font-weight="700" letter-spacing="4">ICFORGE</text>
+<text x="276" y="90" fill="#a5b4c4" font-family="Arial,sans-serif" font-size="17" letter-spacing="3">DIGITAL DESIGN WORKSPACE</text>
+<circle cx="1312" cy="81" r="7" fill="#74dfa6"/><text x="1330" y="88" fill="#74dfa6" font-family="Arial,sans-serif" font-size="17" font-weight="700" letter-spacing="2">HX1P35A · BOARD RUN PASSED</text>
+<text x="82" y="174" fill="#70d6e8" font-family="Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="4">TINYSTORIES260K  /  HARDWARE RESULT</text>
+<text x="82" y="252" fill="#f2f5f7" font-family="Arial,sans-serif" font-size="60" font-weight="700">A tiny story.</text>
+<text x="82" y="322" fill="#ffd21f" font-family="Arial,sans-serif" font-size="60" font-weight="700">Computed on FPGA.</text>
+<text x="84" y="370" fill="#a5b4c4" font-family="Arial,sans-serif" font-size="20">FP32 inference · RV32I softcore · 50 MHz · 64-token context</text>
+<!-- Stylized board and package drawing, not a photograph -->
+<rect x="940" y="157" width="560" height="320" rx="20" fill="#0e1820" stroke="#315060" stroke-width="2"/>
+<text x="974" y="198" fill="#9fb5c4" font-family="Arial,sans-serif" font-size="15" letter-spacing="2">HX1P35A  /  HDL2604</text>
+<rect x="1140" y="230" width="210" height="160" rx="13" fill="#121d26" stroke="#ffd21f" stroke-width="2"/>
+<rect x="1160" y="250" width="170" height="120" rx="6" fill="#091017" stroke="#485d69"/>
+<text x="1245" y="284" text-anchor="middle" fill="#ffd21f" font-family="Arial,sans-serif" font-size="18" font-weight="700">PH1P35</text>
+<text x="1245" y="311" text-anchor="middle" fill="#d0d9df" font-family="Arial,sans-serif" font-size="14">RV32I SOFTCORE</text>
+<text x="1245" y="339" text-anchor="middle" fill="#6fd4e8" font-family="Arial,sans-serif" font-size="13">TRANSFORMER · FP32</text>
+<path d="M1160 220V230 M1160 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1180 220V230 M1180 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1200 220V230 M1200 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1220 220V230 M1220 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1240 220V230 M1240 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1260 220V230 M1260 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1280 220V230 M1280 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1300 220V230 M1300 390V400" stroke="#d19b43" stroke-width="3"/><path d="M1320 220V230 M1320 390V400" stroke="#d19b43" stroke-width="3"/>
+<path d="M1120 250H1140 M1350 250H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 270H1140 M1350 270H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 290H1140 M1350 290H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 310H1140 M1350 310H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 330H1140 M1350 330H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 350H1140 M1350 350H1370" stroke="#d19b43" stroke-width="3"/><path d="M1120 370H1140 M1350 370H1370" stroke="#d19b43" stroke-width="3"/>
+<rect x="978" y="250" width="126" height="86" rx="9" fill="#10232a" stroke="#37636a"/>
+<text x="1041" y="279" text-anchor="middle" fill="#8ce6e6" font-family="Arial,sans-serif" font-size="14">N25Q128</text>
+<text x="1041" y="301" text-anchor="middle" fill="#a5b4c4" font-family="Arial,sans-serif" font-size="12">MODEL FLASH</text>
+<path d="M1104 292H1140" stroke="#6fd4e8" stroke-width="3"/><circle cx="1122" cy="292" r="4" fill="#ffd21f"/>
+<rect x="1384" y="250" width="86" height="86" rx="9" fill="#201b13" stroke="#806439"/>
+<text x="1427" y="280" text-anchor="middle" fill="#f4ca74" font-family="Arial,sans-serif" font-size="12">UART</text>
+<text x="1427" y="302" text-anchor="middle" fill="#a5b4c4" font-family="Arial,sans-serif" font-size="11">115200</text>
+<path d="M1370 292H1384" stroke="#74dfa6" stroke-width="3"/>
+<rect x="978" y="368" width="126" height="60" rx="9" fill="#111b20" stroke="#315343"/>
+<text x="1041" y="394" text-anchor="middle" fill="#74dfa6" font-family="Arial,sans-serif" font-size="13">50 MHz</text>
+<text x="1041" y="413" text-anchor="middle" fill="#a5b4c4" font-family="Arial,sans-serif" font-size="11">SYSTEM CLOCK</text>
+<path d="M1104 399H1120V365H1140" stroke="#74dfa6" stroke-width="2" fill="none"/>
+<text x="1382" y="410" fill="#78909e" font-family="Arial,sans-serif" font-size="12">FPGA SRAM config</text>
+<text x="1382" y="430" fill="#78909e" font-family="Arial,sans-serif" font-size="12">Model stored on N25Q128</text>
+<!-- verified metrics -->
+<rect x="82" y="520" width="454" height="157" rx="16" fill="#0e151c" stroke="#263440"/>
+<text x="110" y="559" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="15" letter-spacing="2">USER FLASH · READBACK</text>
+<text x="110" y="618" fill="#74dfa6" font-family="monospace" font-size="38" font-weight="700">CRC 53c34099</text>
+<text x="110" y="650" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="14">1,056,540 bytes · uploaded and verified</text>
+<rect x="551" y="520" width="454" height="157" rx="16" fill="#0e151c" stroke="#263440"/>
+<text x="579" y="559" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="15" letter-spacing="2">LOGITS · BOARD VS REFERENCE</text>
+<text x="579" y="618" fill="#70d6e8" font-family="Arial,sans-serif" font-size="39" font-weight="700">1,536</text>
+<text x="579" y="650" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="14">maximum absolute error  9.54e-06</text>
+<rect x="1020" y="520" width="480" height="157" rx="16" fill="#0e151c" stroke="#263440"/>
+<text x="1048" y="559" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="15" letter-spacing="2">AUTOREGRESSIVE GENERATION</text>
+<text x="1048" y="618" fill="#ffd21f" font-family="Arial,sans-serif" font-size="39" font-weight="700">8 / 8 tokens</text>
+<text x="1048" y="650" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="14">matched the independent reference</text>
+<rect x="82" y="718" width="1418" height="181" rx="16" fill="#11151a" stroke="#806439" stroke-width="1.5"/>
+<text x="112" y="761" fill="#f4ca74" font-family="Arial,sans-serif" font-size="15" font-weight="700" letter-spacing="3">STORY GENERATED ON THE BOARD</text>
+<text x="112" y="831" fill="#f2f5f7" font-family="Georgia,serif" font-size="38">“Once upon a time, there was a little girl”</text>
+<text x="112" y="869" fill="#9fb2c1" font-family="Arial,sans-serif" font-size="15">Prompt: Once upon a time   ·   generated tokens: 8   ·   model: TinyStories260K FP32</text>
+<path d="M82 925H1500" stroke="#263440"/>
+<text x="84" y="949" fill="#718390" font-family="Arial,sans-serif" font-size="12" letter-spacing="1.5">REAL FPGA BOARD OUTPUT · JEDEC 0020ba18 · BITSTREAM ae80c5a88781c245…</text>
+<text x="1498" y="949" text-anchor="end" fill="#718390" font-family="Arial,sans-serif" font-size="12">IC FORGE  /  2026</text>
+</svg>
