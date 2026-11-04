@@ -76,7 +76,7 @@ python -m fpga_agent flow my-design
 
 工程严谨性增强：新增 `/lint`、`/review`，按规格、RTL、验证、实现、集成职责生成可追溯检查与下一步动作。普通 RTL 修复冻结已接受的验证器；新工程按需求 ID 检查运行结果；仿真指纹覆盖规格、配置、include 和 ROM 数据；交付包附工程审查与逐文件 SHA-256。缺少工具、人工审阅或未执行分析会明确保留。使用与迁移说明见 [工程审查流程](docs/engineering-workflow.md)。
 
-当前工程门禁版本为 [v0.4.0](https://github.com/Wooohaaa/digital-ic-design-agent/releases/tag/v0.4.0)，发布包包含 TUI、安装 wheel、四份工程交付包和本轮验证记录。实测结果及未关闭检查见 [工程流程验收](docs/engineering-validation.md)。历史 0.3/0.2 材料保留用于复现。
+当前版本为 [v0.4.1](https://github.com/Wooohaaa/digital-ic-design-agent/releases/tag/v0.4.1)：终端使用 `█ ╔ ═ ║ ╚` 拼成金黄渐变的立体 ICFORGE 字标，启动卡片包含字符芯片图案、工具与工作流清单、模型和会话信息。发布包包含 TUI、安装 wheel、四份工程交付包和验证记录。工程门禁实测结果及未关闭检查见 [工程流程验收](docs/engineering-validation.md)。历史版本保留用于复现。
 
 归档内的三份工程分别在 `benchmarks/rv32_*/deliverables/`，包含 RTL、独立 testbench、约束、可移动 TD `.al` 工程、bitstream、时序/资源报告和验证记录。综合测试封装含片上 ROM/RAM 和提交签名序列化输出。
 

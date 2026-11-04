@@ -1,13 +1,13 @@
-$forge-bg: #0d1015;
-$forge-panel: #12171e;
-$forge-line: #293542;
-$forge-muted: #8998a9;
-$forge-accent: #55aaff;
-$forge-violet: #9bb8d4;
+$forge-bg: #171717;
+$forge-panel: #1b1b19;
+$forge-line: #ad795a;
+$forge-muted: #8e824a;
+$forge-accent: #ffd21f;
+$forge-violet: #e6bd67;
 
 Screen {
     background: $forge-bg;
-    color: #dbe2ef;
+    color: #e7e4ce;
 }
 
 #app-shell {
@@ -19,41 +19,35 @@ Screen {
 #transcript {
     height: 1fr;
     min-height: 5;
-    padding: 1 0;
+    padding: 0;
     scrollbar-size: 1 1;
 }
 
 #welcome {
     height: auto;
-    margin: 2 0 1 0;
+    margin: 0;
 }
 
 #wordmark {
-    height: 15;
+    height: auto;
     margin-bottom: 1;
     color: $forge-accent;
 }
 
-#wordmark-compact {
-    display: none;
-    height: 2;
+#welcome-dashboard {
+    height: auto;
     margin-bottom: 1;
-    color: $forge-accent;
 }
 
 #welcome-title {
-    height: 1;
-    color: #eef2fb;
-    text-style: bold;
-}
-
-#welcome-meta, #welcome-note {
-    height: 1;
-    color: $forge-muted;
+    height: auto;
+    color: #e7e4ce;
 }
 
 #welcome-note {
-    margin-top: 1;
+    height: auto;
+    color: $forge-muted;
+    margin-top: 0;
 }
 
 .message {
@@ -61,7 +55,7 @@ Screen {
     height: auto;
     margin: 0 0 1 0;
     padding: 0 0 1 0;
-    border-bottom: solid #222c37;
+    border-bottom: solid #2a2922;
     background: transparent;
 }
 
@@ -102,7 +96,7 @@ Markdown {
 }
 
 MarkdownH1, MarkdownH2, MarkdownH3 { color: $forge-violet; }
-MarkdownFence { background: #111923; }
+MarkdownFence { background: #20201c; }
 
 #task-status {
     display: none;
@@ -117,7 +111,7 @@ MarkdownFence { background: #111923; }
     margin-bottom: 1;
     padding: 0 1;
     border: round $forge-line;
-    background: #080c13;
+    background: #131311;
     scrollbar-size: 1 1;
 }
 
@@ -133,14 +127,16 @@ MarkdownFence { background: #111923; }
     height: auto;
     min-height: 3;
     max-height: 8;
-    margin-top: 1;
-    padding-top: 1;
+    margin-top: 0;
+    padding: 0;
     border-top: solid $forge-line;
+    border-bottom: solid $forge-line;
     background: $forge-bg;
 }
 
 #composer:focus-within {
-    border-top: solid $forge-accent;
+    border-top: solid $forge-line;
+    border-bottom: solid $forge-line;
 }
 
 #prompt-glyph {
@@ -153,19 +149,20 @@ MarkdownFence { background: #111923; }
 #prompt {
     width: 1fr;
     height: auto;
-    min-height: 2;
-    max-height: 7;
+    min-height: 1;
+    max-height: 6;
     padding: 0;
     border: none;
     background: $forge-bg;
 }
 
 #prompt:focus { border: none; }
-TextArea > .text-area--cursor { background: $forge-accent; color: $forge-bg; }
+TextArea > .text-area--cursor { background: #20bce8; color: $forge-bg; }
 
 #status-line {
     height: 1;
     padding: 0 1;
+    margin-top: 1;
     color: $forge-muted;
 }
 
@@ -206,6 +203,3 @@ OptionList:focus { border: none; }
 #preview VerticalScroll { height: 1fr; }
 
 Screen.narrow #app-shell { padding: 0 1; }
-Screen.narrow #wordmark { display: none; }
-Screen.narrow #wordmark-compact { display: block; }
-Screen.narrow #welcome { margin-top: 1; }

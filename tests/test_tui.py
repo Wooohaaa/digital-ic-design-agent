@@ -68,6 +68,21 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.selected.name,'second')
             self.assertFalse(any(m.get('queue_id') for m in app.session.messages))
 
+    async def test_startup_character_banner_survives_resize_and_stays_in_scrollback(self):
+        app=ForgeApp(self.root)
+        async with app.run_test(size=(156,46)) as pilot:
+            for width,height in ((80,24),(58,28),(156,46)):
+                await pilot.resize_terminal(width,height)
+                await pilot.pause()
+                banner=app.query_one('#wordmark')
+                self.assertTrue(banner.display)
+                self.assertGreaterEqual(banner.region.height,5)
+                self.assertLessEqual(app.query_one(Prompt).region.bottom,height)
+            await app.add_message('user','Hello')
+            self.assertTrue(app.query_one('#welcome').display)
+            await app.new_session()
+            self.assertTrue(app.query_one('#wordmark').display)
+
     async def test_review_tool_renders_gate_findings_when_artifacts_are_blocked(self):
         project=create_project('review',self.root/'review')
         app=ForgeApp(self.root)

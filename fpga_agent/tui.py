@@ -24,24 +24,8 @@ from textual.widgets import Button, Input, Label, Markdown, OptionList, RichLog,
 from textual.widgets.option_list import Option
 
 from .terminal import COMMANDS, PROVIDERS, ProcessRunner, Session, TaskPlan, Workspace, evidence, make_plan, read_json, redact, write_json
-
-# FIGlet Fraktur lettering rendered from pyfiglet's Fraktur font (xero/figlet-fonts).
-FRAKTUR_WORDMARK = r'''    .....     .        ...                 .....                  ....              ..      ...           ....        .         ..      .
-  .d88888Neu. 'L    xH88"`~ .x8X        .H8888888x.  '`+      .x~X88888Hx.       :~"8888x :"%888x      .x88" `^x~  xH(`      x88f` `..x88. .>
-  F""""*8888888F  :8888   .f"8888Hf    :888888888888x.  !    H8X 888888888h.    8    8888Xf  8888>    X888   x8 ` 8888h    :8888   xf`*8888%
- *      `"*88*"  :8888>  X8L  ^""`     8~    `"*88888888"   8888:`*888888888:  X88x. ?8888k  8888X   88888  888.  %8888   :8888f .888  `"`
-  -....    ue=:. X8888  X888h          !      .  `f""""     88888:        `%8  '8888L'8888X  '%88X  <8888X X8888   X8?    88888' X8888. >"8x
-         :88N  ` 88888  !88888.         ~:...-` :8L <)88: . `88888          ?>  "888X 8888X:xnHH(`` X8888> 488888>"8888x  88888  ?88888< 888>
-         9888L   88888   %88888            .   :888:>X88! `. ?888%           X    ?8~ 8888X X8888   X8888>  888888 '8888L 88888   "88888 "8%
-  uzu.   `8888L  88888 '> `8888>        :~"88x 48888X ^`    ~*??.            >  -~`   8888> X8888   ?8888X   ?8888>'8888X 88888 '  `8888>
-,""888i   ?8888  `8888L %  ?888   !    <  :888k'88888X     .x88888h.        <   :H8x  8888  X8888    8888X h  8888 '8888~ `8888> %  X88!
-4  9888L   %888>  `8888  `-*""   /       d8888f '88888X   :"""8888888x..  .x    8888> 888~  X8888     ?888  -:8*"  <888"   `888X  `~""`   :
-'  '8888   '88%     "888.      :"       :8888!    ?8888>  `    `*888888888"     48`" '8*~   `8888!`    `*88.      :88%       "88k.      .~
-     "*8Nu.z*"        `""***~"`         X888!      8888~          ""***""        ^-==""      `""          ^"~====""`           `""*==~~`
-                                        '888       X88f
-                                         '%8:     .8*"
-                                            ^----~"`
-'''
+from .branding import wordmark, startup_panel
+from . import __version__
 
 HELP = """### 在终端完成设计闭环
 直接描述需求；使用 `@文件路径` 补充代码或规格。模型可以回答问题，也可以调用已有的设计、验证和交付工具。
@@ -149,7 +133,7 @@ class MessageCard(Vertical):
             yield Static(glyphs.get(self.role, "·"), classes="message-glyph")
             with Vertical(classes="message-content"):
                 if self.role == "assistant":
-                    yield Static("ℑℭ 𝔉𝔬𝔯𝔤𝔢", classes="message-title")
+                    yield Static('ICFORGE', classes='message-title')
                 yield Markdown(self.text, open_links=False)
 
 
@@ -252,7 +236,7 @@ class Preview(ModalScreen[None]):
 
 
 class ForgeApp(App):
-    TITLE = "IC Forge"
+    TITLE = 'ICFORGE'
     SUB_TITLE = "Digital IC design workspace"
     CSS_PATH = "tui.tcss"
     ENABLE_COMMAND_PALETTE = False
@@ -303,18 +287,17 @@ class ForgeApp(App):
         with Vertical(id="app-shell"):
             with VerticalScroll(id="transcript"):
                 with Vertical(id="welcome"):
-                    yield Static(FRAKTUR_WORDMARK, id="wordmark", markup=False)
-                    yield Static("ℑℭ 𝔉𝔬𝔯𝔤𝔢", id="wordmark-compact", markup=False)
-                    yield Static("数字 IC 设计 · 仿真 · FPGA 实现", id="welcome-title")
-                    yield Static(f"{self.settings.provider} / {self.settings.model} · {self.workspace.root.name}", id="welcome-meta")
-                    yield Static("输入需求 · /help · Ctrl+P 命令 · Ctrl+B 工程 · Ctrl+J 日志 · @路径文件", id="welcome-note")
+                    yield Static(id='wordmark', markup=False)
+                    yield Static(id='welcome-dashboard', markup=False)
+                    yield Static('Welcome to ICFORGE! Type your message or /help for commands.', id='welcome-title')
+                    yield Static('✦ 输入设计需求开始 · Ctrl+P 命令 · Ctrl+B 工程 · @路径附加文件', id='welcome-note')
             yield Static(id="task-status")
             yield RichLog(id="logs", highlight=False, markup=False, wrap=True, max_lines=2000)
             yield Static(id="suggestions")
+            yield Static(id="status-line")
             with Horizontal(id="composer"):
                 yield Static("❯", id="prompt-glyph")
                 yield Prompt(id="prompt")
-            yield Static(id="status-line")
 
     async def on_mount(self) -> None:
         self.query_one("#logs").display = False
@@ -330,8 +313,32 @@ class ForgeApp(App):
 
     def on_resize(self, event) -> None:
         if self.screen_stack:
-            self.screen_stack[0].set_class(event.size.width < 125, "compact")
-            self.screen_stack[0].set_class(event.size.width < 145, "narrow")
+            self.screen_stack[0].set_class(event.size.width < 95, 'narrow')
+            self.refresh_welcome()
+
+    def refresh_welcome(self) -> None:
+        if not self.screen_stack:
+            return
+        root = self.screen_stack[0]
+        if not root.query('#wordmark'):
+            return
+        from .td import find_td_command
+        try:
+            find_td_command()
+            td_ready = True
+        except FileNotFoundError:
+            td_ready = False
+        width = max(24, root.size.width - (2 if root.size.width < 95 else 4))
+        root.query_one('#wordmark', Static).update(wordmark(width))
+        root.query_one('#welcome-dashboard', Static).update(startup_panel(
+            width=width, height=root.size.height, version=__version__,
+            provider=self.settings.provider, model=self.settings.model,
+            workspace=self.workspace.root, project=self.selected.name if self.selected else '',
+            session=self.session.id, connected=self.model_ready(), command_count=len(COMMANDS),
+            toolchain={
+                'Icarus':bool(shutil.which('iverilog') or (Path(__file__).resolve().parent.parent/'.tools/icarus/bin/iverilog.exe').is_file()),
+                'Anlogic TD':td_ready, 'Verilator':bool(shutil.which('verilator')),
+            }))
 
     def environment(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -354,27 +361,24 @@ class ForgeApp(App):
         ready = self.model_ready()
         self.project_paths = self.workspace.projects()
         status = Text()
-        status.append("● " if ready else "○ ", style="#55aaff" if ready else "#efc884")
-        status.append(f"{self.settings.provider}/{self.settings.model}", style="#c6d0df")
-        status.append(f"  ·  {self.settings.mode.upper()}", style="#8998a9")
-        status.append(f"  ·  {self.selected.name if self.selected else self.workspace.root.name}", style="#8998a9")
+        status.append('● ' if ready else '○ ', style='#ffd21f' if ready else '#bd845f')
+        status.append(f'{self.settings.provider}/{self.settings.model}', style='#e7e4ce')
+        status.append(f'  ·  {self.settings.mode.upper()}', style='#8e824a')
+        status.append(f'  ·  {self.selected.name if self.selected else self.workspace.root.name}', style='#8e824a')
         if self.queued_input:
             status.append(f"  ·  {len(self.queued_input)} queued", style="#efc884")
         self.query_one("#status-line", Static).update(status)
-        self.query_one("#welcome-meta", Static).update(
-            f"{self.settings.provider} / {self.settings.model} · {self.workspace.root.name}"
-        )
+        self.refresh_welcome()
 
     def tick(self) -> None:
         if self.busy:
             frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
             frame = frames[int(time.monotonic() * 3) % len(frames)]
             self.query_one("#task-status", Static).update(
-                Text(f"{frame}  {self.task_title} · {int(time.monotonic() - self.started)}s · Esc 取消 · Ctrl+J 日志", style="#55aaff")
+                Text(f"{frame}  {self.task_title} · {int(time.monotonic() - self.started)}s · Esc 取消 · Ctrl+J 日志", style='#ffd21f')
             )
 
     async def render_message(self, role: str, text: str) -> None:
-        self.query_one("#welcome").display = False
         transcript = self.query_one("#transcript", VerticalScroll)
         await transcript.mount(MessageCard(role, text))
         transcript.scroll_end(animate=False)

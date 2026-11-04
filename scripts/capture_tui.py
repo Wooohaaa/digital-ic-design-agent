@@ -15,15 +15,15 @@ sys.path.insert(0, str(ROOT))
 from fpga_agent.tui import ForgeApp
 
 
-async def capture(verify: bool) -> None:
+async def capture(verify: bool, width: int = 156, height: int = 46, output: str | None = None) -> None:
     os.environ.pop("NO_COLOR", None)
     os.environ.update(TERM="xterm-256color", COLORTERM="truecolor")
     app = ForgeApp(ROOT)
     app.settings.mode = "build"
-    async with app.run_test(size=(156, 46)) as pilot:
-        project = ROOT / "benchmarks/rv32_pipeline"
-        await app.select_project(project)
+    async with app.run_test(size=(width, height)) as pilot:
         if verify:
+            project = ROOT / 'benchmarks/rv32_pipeline'
+            await app.select_project(project)
             await app.add_message("user", "/verify")
             await app.submit_command("/verify")
             for _ in range(1200):
@@ -53,7 +53,7 @@ async def capture(verify: bool) -> None:
             tag = re.sub(r'textLength="[^"]*"', f'textLength="{cell_len(value)*12.2:g}"', tag)
         return tag + content + "</text>"
     svg = re.sub(r"(<text\b[^>]*>)([^<]*)</text>", wide_text, svg)
-    target = ROOT / "docs/images" / ("tui-verified.png" if verify else "tui.png")
+    target = Path(output) if output else ROOT / 'docs/images' / ('tui-verified.png' if verify else 'tui.png')
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(resvg_py.svg_to_bytes(svg_string=svg))
     print(target)
@@ -62,4 +62,8 @@ async def capture(verify: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--verify", action="store_true")
-    asyncio.run(capture(parser.parse_args().verify))
+    parser.add_argument('--width',type=int,default=156)
+    parser.add_argument('--height',type=int,default=46)
+    parser.add_argument('--output')
+    args=parser.parse_args()
+    asyncio.run(capture(args.verify,args.width,args.height,args.output))
