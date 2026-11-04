@@ -10,20 +10,6 @@ icforge
 
 安装完成后，可在任意目录运行 `icforge` 启动 TUI；当前目录会作为默认工作区。
 
-## 界面与 TinyStories 实板效果
-
-下面展示 IC Forge 的终端工作界面，以及 TinyStories260K 在 HX1P35A 上的实际运行与校验结果。完整工程、复现步骤和验收证据见 [TinyStories 工程试验](docs/tinystories-flow.md)。
-
-<p align="center">
-  <img src="docs/images/icforge-tinystories-tui.png" alt="IC Forge TUI 中执行 TinyStories260K 实板验收" width="100%">
-  <br><em>IC Forge TUI：TinyStories260K 工程会话与实板验收结果</em>
-</p>
-
-<p align="center">
-  <img src="docs/images/tinystories-hx1p35a-result.png" alt="TinyStories260K 在 HX1P35A FPGA 开发板上的部署与推理结果" width="100%">
-  <br><em>HX1P35A 实测：Flash CRC 校验、1,536 个 logits 对比和板上生成结果</em>
-</p>
-
 在界面里用 `/connect` 连接模型，`/project` 选择工程，`/verify` 验证，`/flow` 完成实现交付。`Ctrl+P` 命令面板、`Ctrl+O` 文件搜索、`Shift+Tab` 切换 Plan / Build、`Esc` 取消任务。完整操作与迁移说明见 [终端工作台指南](docs/terminal.md)。已有 CLI 命令继续可用。
 
 用于逐步积累数字 IC 设计能力的本地 agent。当前已实现模型生成/修复、独立 RISC-V 指令级验证、Anlogic TD 综合与布局布线、时序/产物验收和交付归档。
@@ -32,7 +18,13 @@ icforge
 
 ## 模型与验证
 
-TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比，输出 `Once upon a time, there was a little girl`。模型、生产固件、SPI/UART 完整 RTL 推理和实板证据流程见 [TinyStories 工程试验](docs/tinystories-flow.md)。
+TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比。额外三轮板上生成也逐 token 通过独立参考校验（每轮 16 个新 token，以下为达到长度上限时的原始片段）：
+
+- `Once upon a time, a little fox` → “Once upon a time, a little fox named Benny. Benny loved to play with his”
+- `A little girl` → “A little girl named Lily went to the park with her mom. She saw a”
+- `A small dog` → “A small dog named Spot was a boy who loved to play”
+
+模型、生产固件、SPI/UART 完整 RTL 推理和实板证据流程见 [TinyStories 工程试验](docs/tinystories-flow.md)；逐轮校验记录及超时案例见 [实板故事样本](docs/tinystories-rounds.md)。
 
 - `exchange`：本轮临时模型后端。当前会话的 Luna 子代理生成实际响应，再通过带模型标识的文件导入 agent；请求、响应、指纹和修复记录都保留。
 - `api`：OpenAI Responses API，默认模型 `gpt-6-luna`，需要 API Key；`chat` 为显式兼容接口。
