@@ -4,9 +4,11 @@
 
 ```powershell
 python -m pip install -e .
-ic-forge
+icforge
 # 或 python -m fpga_agent tui --workspace .
 ```
+
+安装完成后，可在任意目录运行 `icforge` 启动 TUI；当前目录会作为默认工作区。
 
 ![IC Forge terminal workspace](docs/images/tui.png)
 
