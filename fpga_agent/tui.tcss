@@ -188,7 +188,8 @@ OptionList > .option-list--option-highlighted { background: $forge-selected; col
 OptionList:focus { border: none; }
 Scrollbar { background: $forge-bg; color: $forge-accent; }
 
-#connection { height: auto; }
+#connection { height: 86%; max-height: 90%; }
+#connection-fields { height: 1fr; min-height: 0; border: none; background: transparent; }
 #connection Label { height: 1; margin-top: 1; color: $forge-muted; }
 #connection Select { margin: 0; background: $forge-bg; color: $forge-foreground; border: tall $forge-line; }
 .dialog SelectCurrent, .dialog SelectOverlay { background: $forge-bg; color: $forge-foreground; }

@@ -184,7 +184,10 @@ class Picker(ModalScreen[str | None]):
 
 
 class Connection(ModalScreen[dict | None]):
-    BINDINGS = [Binding("escape", "dismiss(None)", show=False)]
+    BINDINGS = [
+        Binding("escape", "cancel_connection", show=False, priority=True),
+        Binding("ctrl+enter", "save_connection", "保存连接", show=False, priority=True),
+    ]
 
     def __init__(self, settings):
         super().__init__()
@@ -193,24 +196,44 @@ class Connection(ModalScreen[dict | None]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog", id="connection"):
             yield Static("CONNECT A MODEL", classes="dialog-title")
-            yield Label("Provider")
-            yield Select([(name, name) for name in PROVIDERS], value=self.settings.provider, allow_blank=False, id="provider")
-            yield Label("Model")
-            yield Input(value=self.settings.model, id="model")
-            yield Label("Base URL · 空白使用环境变量或默认地址")
-            yield Input(value=self.settings.base_url, placeholder="https://api.openai.com/v1", id="base-url")
-            yield Label("API Key · 密码输入，仅当前会话内存有效")
-            yield Input(password=True, placeholder="留空沿用环境变量中的 Key", id="api-key")
-            yield Static("api / chat 使用 API Key；codex 使用本机 CLI 登录；exchange 只重放已有响应。", classes="muted")
+            with VerticalScroll(id="connection-fields"):
+                yield Label("Provider")
+                yield Select([(name, name) for name in PROVIDERS], value=self.settings.provider, allow_blank=False, id="provider")
+                yield Label("Model")
+                yield Input(value=self.settings.model, id="model")
+                yield Label("Base URL · 空白使用环境变量或默认地址")
+                yield Input(value=self.settings.base_url, placeholder="https://api.openai.com/v1", id="base-url")
+                yield Label("API Key · 密码输入，仅当前会话内存有效")
+                yield Input(password=True, placeholder="留空沿用环境变量中的 Key", id="api-key")
+                yield Static("api / chat 使用 API Key；codex 使用本机 CLI 登录；exchange 只重放已有响应。", classes="muted")
+            yield Static("输入框 Enter / Ctrl+Enter 保存 · Esc 取消", classes="muted connection-shortcuts")
             with Horizontal(classes="dialog-buttons"):
                 yield Button("取消", id="connection-cancel")
                 yield Button("保存连接", id="connection-save", variant="primary")
 
+    def on_mount(self) -> None:
+        self.query_one("#model", Input).focus()
+
+    def action_cancel_connection(self) -> None:
+        self.dismiss(None)
+
+    def action_save_connection(self) -> None:
+        self._save()
+
+    @on(Input.Submitted)
+    def save_on_enter(self, event: Input.Submitted) -> None:
+        self._save()
+
     @on(Button.Pressed)
     def save(self, event: Button.Pressed) -> None:
         if event.button.id == "connection-cancel":
-            self.dismiss(None)
+            self.action_cancel_connection()
             return
+        if event.button.id != "connection-save":
+            return
+        self._save()
+
+    def _save(self) -> None:
         model = self.query_one("#model", Input).value.strip()
         base_url = self.query_one("#base-url", Input).value.strip().rstrip("/")
         parsed = urlsplit(base_url)
@@ -248,7 +271,8 @@ class ForgeApp(App):
         Binding("ctrl+o", "files", "文件", show=False, priority=True),
         Binding("ctrl+n", "new_session", "新会话", show=False, priority=True),
         Binding("shift+tab", "mode", "模式", priority=True),
-        Binding("escape", "cancel_task", "取消", show=False, priority=True),
+        # Let the active modal consume Esc before the app-level task cancel action.
+        Binding("escape", "cancel_task", "取消", show=False),
         Binding("ctrl+c", "interrupt", show=False, priority=True),
         Binding("ctrl+q", "safe_quit", "退出", priority=True),
         Binding("f1", "help", show=False),

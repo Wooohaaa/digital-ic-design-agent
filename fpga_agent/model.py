@@ -114,16 +114,23 @@ def _api_request(prompt: str, *, model: str, schema: dict[str, Any] | None, chat
 
     if chat:
         endpoint = base_url + "/chat/completions"
+        chat_prompt = prompt
+        if schema is not None:
+            # Many OpenAI-compatible chat endpoints (including DeepSeek Chat
+            # Completions) implement JSON mode but not the newer json_schema
+            # response format. Keep the schema in the prompt and validate the
+            # returned object in the host instead of rejecting the request at
+            # the provider gateway.
+            chat_prompt += (
+                "\n\nReturn exactly one JSON object matching this JSON Schema. "
+                "Do not wrap it in Markdown fences:\n"
+                + json.dumps(schema, ensure_ascii=False)
+            )
         body: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": chat_prompt}],
             "response_format": {"type": "json_object"},
         }
-        if schema is not None:
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": "response", "strict": True, "schema": schema},
-            }
     else:
         endpoint = base_url + "/responses"
         body = {"model": model, "input": prompt}
@@ -157,7 +164,15 @@ def _api_request(prompt: str, *, model: str, schema: dict[str, Any] | None, chat
             result = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:3000]
-        raise RuntimeError(f"模型 API 返回 HTTP {exc.code}: {detail}") from exc
+        request_id = next((exc.headers.get(name) for name in ("x-request-id", "request-id", "cf-ray") if exc.headers.get(name)), None)
+        context = f"模型 API 返回 HTTP {exc.code}"
+        if chat:
+            context += "（Chat Completions）"
+        if request_id:
+            context += f"；请求标识 {request_id}"
+        if exc.code >= 500 and detail.strip() in {"", f"error code: {exc.code}", str(exc.code)}:
+            detail = "上游服务返回服务器错误；请根据请求标识检查 API 网关或模型服务日志。"
+        raise RuntimeError(f"{context}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"无法连接模型 API：{exc.reason}") from exc
 
