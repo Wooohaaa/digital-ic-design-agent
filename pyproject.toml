@@ -7,7 +7,7 @@ name = "hx1p35a-fpga-agent"
 version = "0.3.0"
 description = "AI-assisted RTL to simulation and Anlogic TD implementation flow for HX1P35A"
 requires-python = ">=3.11"
-dependencies = ["textual>=8.2.8,<9"]
+dependencies = ["textual>=8.2.8,<9", "rich>=13.3.3,<16"]
 
 [project.scripts]
 fpga-agent = "fpga_agent.cli:main"
