@@ -1,0 +1,27 @@
+{
+  "model": "gpt-6-luna",
+  "issue": "SRAI sign extension was lost because the immediate right shift selected signed and unsigned expressions through a ternary operator.",
+  "failure": {
+    "program": "alu_edges",
+    "retire_index": 26,
+    "pc": "0x00000068",
+    "instruction": "0x41f0dc93",
+    "operation": "SRAI x25,x1,31",
+    "source_value": "0x80000000",
+    "actual": "0x00000001",
+    "expected": "0xffffffff"
+  },
+  "repair": "Decode SRAI and SRLI in separate branches. SRAI now directly assigns $signed(a) >>> shamt; SRLI directly assigns a >> shamt. Register-register SRA already used a directly signed arithmetic-shift expression and was left unchanged. The first full directed corpus run then exposed that an LW to x0 retired the discarded loaded value; load retirement data is now zero when rd_we is false, consistent with the trace contract for x0/no-write operations.",
+  "additional_failure": {
+    "program": "memory_lanes",
+    "retire_index": 23,
+    "pc": "0x0000005c",
+    "instruction": "0x000fa003",
+    "operation": "load to x0",
+    "actual_retire_rd": 0,
+    "actual_retire_wdata": "0x80ff0001",
+    "expected_retire_rd": 0,
+    "expected_retire_wdata": "0x00000000"
+  },
+  "verification": "Icarus compilation succeeded. The full directed CPU benchmark with seeds=0 passed all 44 CPU cases. The attached SoC run stopped at its expected board_program concatenation issue (trap observed), which is outside this core repair."
+}

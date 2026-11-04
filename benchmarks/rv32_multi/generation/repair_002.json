@@ -1,0 +1,26 @@
+{
+  "model": "gpt-6-luna",
+  "issue": "Base FENCE instructions with nonzero rd/rs1 or nonzero fm/pred/succ fields were incorrectly trapped.",
+  "failure": {
+    "program": "fence_forward_compatibility",
+    "words": ["0xfabf8f8f", "0x8330000f", "0x00100073"],
+    "expected_retirements": 3,
+    "expected_trap": false,
+    "actual_retirements": 0,
+    "actual_trap": true
+  },
+  "normative_basis": "RISC-V Unprivileged ISA v20260120, section 1.1.7: FENCE rs1 and rd are ignored, and reserved fm/predecessor/successor configurations are treated as normal FENCE instructions. https://docs.riscv.org/reference/isa/v20260120/unpriv/rv32.html",
+  "repair": "For opcode 0001111, accept funct3=000 as a FENCE no-op without validating rd, rs1, or the remaining instruction fields. Continue to trap unsupported funct3 values.",
+  "preserved_failure_evidence": [
+    "generation/fence_failure/core_before_repair.v",
+    "generation/fence_failure/actual.log",
+    "generation/fence_failure/expected.json",
+    "generation/fence_failure/program.hex"
+  ],
+  "verification": {
+    "command": "python -c \"from pathlib import Path; from fpga_agent.cpu_bench import run_benchmark; r=run_benchmark(Path('benchmarks/rv32_multi'), seeds=0); print('status=',r['status'],'cases=',r['case_count'],'board_soc=',r['board_soc'])\"",
+    "result": "pass",
+    "cpu_cases": 50,
+    "board_soc": "pass"
+  }
+}

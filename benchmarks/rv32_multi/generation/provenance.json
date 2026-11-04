@@ -1,0 +1,7 @@
+{
+  "model": "gpt-6-luna",
+  "architecture": "multi-cycle",
+  "artifact": "rtl/rv32_core.v",
+  "notes": "Generated as a distinct FETCH/DECODE/COMMIT state machine for the RV32I benchmark.",
+  "initial_core_sha256": "87898a9a05e7002ebf76eb69d6f32715e76cc7f1823291210b214f2b02cd4ea0"
+}

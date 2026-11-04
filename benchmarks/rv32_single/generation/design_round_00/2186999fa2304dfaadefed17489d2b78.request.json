@@ -1,0 +1,19 @@
+{
+  "prompt": "Implement a synthesizable RV32I core named rv32_core, ANSI ports:\ninput wire clk,rst_n;\noutput wire [31:0] imem_addr; input wire [31:0] imem_rdata;\noutput wire dmem_valid; output wire [3:0] dmem_wstrb;\noutput wire [31:0] dmem_addr,dmem_wdata; input wire [31:0] dmem_rdata;\noutput reg retire_valid; output reg [31:0] retire_pc,retire_insn;\noutput reg [4:0] retire_rd; output reg [31:0] retire_wdata;\noutput reg halted,trap.\nMemory reads combinational aligned 32-bit word at address&~3, little endian.\nStores at rising edge with dmem_valid and nonzero byte-enable; effective byte address,\nbyte enables and shifted write data. No repeated/wrong-path stores.\nAsync reset low: PC0, registers0; x0 hardwired0. Full RV32I arithmetic, shift,\nsigned/unsigned compare, branches, JAL/JALR, LUI/AUIPC, LB/LBU/LH/LHU/LW,\nSB/SH/SW, FENCE nop. No M/C/Zicsr. Misaligned data or taken control transfer,\nECALL/reserved encoding => halt+trap with no commit or side effect.\nTest EEI: EBREAK 00100073 retires then halt without trap. All other legal\ninstructions retire once; registered trace at negedge contains original pc/insn,\nactual written rd/data or zero/zero for no-write and x0 writes.\nNo simulator system tasks, no file IO, no testbench, no shell/Tcl/constraints.\nVerification is independent and immutable; repair RTL only, never weaken checks.\n\nArchitecture: single. Use distinct actual microarchitecture. Return JSON rtl and design_spec.\nCurrent RTL:\n\nIndependent failure diagnostics:\n",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "rtl": {
+        "type": "string"
+      },
+      "design_spec": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "rtl",
+      "design_spec"
+    ],
+    "additionalProperties": false
+  }
+}

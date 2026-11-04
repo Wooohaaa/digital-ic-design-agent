@@ -1,0 +1,11 @@
+{
+  "model": "gpt-6-luna",
+  "architecture": "two-stage RV32I pipeline",
+  "artifacts": [
+    "rtl/rv32_core.v",
+    "spec/design.md"
+  ],
+  "generated_at": "2026-11-04",
+  "scope": "Initial synthesizable core generation; independent harness verification pending.",
+  "initial_core_sha256": "3a3c53daf94b090ef7df8448d5847d7a6bfa4d4bb81c7a4b3e895410e022049a"
+}

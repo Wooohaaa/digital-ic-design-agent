@@ -1,0 +1,31 @@
+{
+  "project": "rv32_multi_initial",
+  "agent_version": "0.2.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "rv32_soc",
+  "testbench_top": "tb_cpu",
+  "rtl_sources": [
+    "rtl/rv32_core.v",
+    "rtl/rv32_soc.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_cpu.v",
+    "tb/tb_soc.v"
+  ],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "td_full_allowed": true,
+  "verification": {
+    "kind": "riscv-retire",
+    "seeds": 64,
+    "trusted_files": [
+      "tb/tb_cpu.v",
+      "tb/tb_soc.v"
+    ],
+    "eei": "bare-metal-test-no-CSR"
+  },
+  "board_signature": "563149ef",
+  "generated_by": "gpt-6-luna via Codex collaboration model backend"
+}

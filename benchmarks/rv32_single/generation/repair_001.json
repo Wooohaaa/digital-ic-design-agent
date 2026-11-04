@@ -1,0 +1,31 @@
+{
+  "model": "gpt-6-luna",
+  "architecture": "single-cycle",
+  "generated_at_utc": "2026-11-04T04:00:16Z",
+  "failure": {
+    "case": "fence_forward_compatibility",
+    "actual": "The core trapped on cycle 1 before retiring any instruction.",
+    "expected": "Retire the two reserved FENCE configurations as no-ops, then retire EBREAK without trap.",
+    "preserved_artifacts": [
+      "generation/fence_failure/actual.log",
+      "generation/fence_failure/expected.json",
+      "generation/fence_failure/rv32_core.before.v"
+    ]
+  },
+  "repair": "For opcode 0x0f, accept funct3=000 regardless of fm, predecessor, successor, rs1, and rd; leave other funct3 encodings illegal.",
+  "source_sha256": {
+    "before": "364fe961e8092567fe19cc24af6ecabf295a3720c117d17c6ada697718680cad",
+    "after": "c806d648edbf8b01aa5a603aa392ae1f5f2e4c53dbaaab5547621c221e3e9e31"
+  },
+  "verification": {
+    "command": "run_benchmark(Path('benchmarks/rv32_single'), seeds=0)",
+    "status": "pass",
+    "case_count": 50,
+    "fence_forward_compatibility": {
+      "status": "pass",
+      "retired": 3,
+      "trap": false
+    },
+    "scope": "Directed RV32I suite only; full seeded suite and TD were not run in this repair."
+  }
+}

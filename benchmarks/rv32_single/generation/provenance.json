@@ -1,0 +1,11 @@
+{
+  "model": "gpt-6-luna",
+  "architecture": "single-cycle",
+  "generated_at_utc": "2026-11-04T03:19:45Z",
+  "artifacts": [
+    "rtl/rv32_core.v",
+    "spec/design.md"
+  ],
+  "verification": "not run; independent differential harness is owned by the benchmark coordinator",
+  "initial_core_sha256": "479c5391307af56f2b51f6e274ba08c52527bf457f572a47196fd38053219a65"
+}

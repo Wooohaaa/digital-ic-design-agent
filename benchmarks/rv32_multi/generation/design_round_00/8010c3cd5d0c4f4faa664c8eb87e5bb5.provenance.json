@@ -1,0 +1,12 @@
+{
+  "provider": "exchange",
+  "model": "gpt-6-luna",
+  "created_at": "2026-11-04T04:01:29.053849+00:00",
+  "request_id": "8010c3cd5d0c4f4faa664c8eb87e5bb5",
+  "error": null,
+  "sha256": {
+    "prompt": "56c3abac6e1d85a309bc73fc8a4a45e3f97f8c8cb23493684a302fd41a91a452",
+    "schema": "9578bce244a35b3fd19d950a261c38c7fe57e56f25c0849fbfd9324086e59ad3",
+    "response": "7fb7ee378c5f387cee67bdea44e0e124555bbbf0e1ae241a8b7d34f4c9064fc5"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "project": "hx1p35a-heartbeat",
+  "agent_version": "0.2.0",
+  "target": "Anlogic PH1P35MDG324",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "hx1p35a_heartbeat",
+  "testbench_top": "tb_hx1p35a_heartbeat",
+  "rtl_sources": ["rtl/hx1p35a_heartbeat.v"],
+  "testbench_sources": ["tb/tb_hx1p35a_heartbeat.v"],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "board_io": {
+    "I_sys_clk": "I_sys_clk",
+    "I_rst_n": "I_rst_n",
+    "O_screen_pwm": "O_screen_pwm"
+  },
+  "top_ports": {
+    "I_sys_clk": "input",
+    "I_rst_n": "input",
+    "O_screen_pwm": "output"
+  },
+  "unmapped_top_ports": [],
+  "td_full_allowed": true,
+  "checks": ["active-low reset initializes output", "counter toggles output at configured half-period", "output remains stable between terminal counts"]
+}

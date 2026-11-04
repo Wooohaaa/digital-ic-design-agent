@@ -1,0 +1,40 @@
+{
+  "project": "rv32_pipeline",
+  "agent_version": "0.2.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "rv32_soc",
+  "testbench_top": "tb_cpu",
+  "rtl_sources": [
+    "rtl/rv32_core.v",
+    "rtl/rv32_soc.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_cpu.v",
+    "tb/tb_soc.v"
+  ],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "td_full_allowed": true,
+  "verification": {
+    "kind": "riscv-retire",
+    "seeds": 64,
+    "trusted_files": [
+      "tb/tb_cpu.v",
+      "tb/tb_soc.v"
+    ],
+    "eei": "bare-metal-test-no-CSR"
+  },
+  "board_signature": "563149ef",
+  "trusted_testbench_hashes": {
+    "tb/tb_cpu.v": "03ad4fb6cc2116470385c5584ef20f687308239fef16c804afd19eac16f23dfe",
+    "tb/tb_soc.v": "58a9f2264072081569bf5c68d63d91d83c724b2660683d6b6f2104643be24e2a"
+  },
+  "generated_by": "gpt-6-luna via exchange",
+  "model_backend": {
+    "model": "gpt-6-luna",
+    "transport": "exchange",
+    "architecture": "pipeline"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "requested_model": "gpt-6-luna",
+  "codex_cli_transport": {
+    "status": "unavailable_for_current_account",
+    "observed_error_code": "model_not_found",
+    "observed_message": "The 'gpt-6-luna' model is not supported when using Codex with a ChatGPT account.",
+    "substituted_model": null
+  },
+  "temporary_backend_used": {
+    "transport": "Codex current-session collaboration subagents, then exchange request/response bridge",
+    "actual_model_override": "gpt-6-luna",
+    "generation_tasks": ["/root/luna_single", "/root/luna_multi", "/root/luna_pipeline"],
+    "api_key_used": false,
+    "note": "Exchange replays the saved actual responses; it does not independently invoke a model. Fresh generation in standalone API mode requires credentials."
+  }
+}
