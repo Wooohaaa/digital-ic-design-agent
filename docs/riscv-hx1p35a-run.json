@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-04",
+  "board": "HX1P35A / PH1P35MDG324",
+  "clock_constraint_mhz": 50,
+  "benchmark": {
+    "method": "Icarus Verilog, 114 fixed RV32I programs per implementation",
+    "seeds": 64,
+    "instruction_count": 18099,
+    "board_soc_rom_ram_signature_simulation": "pass",
+    "score_definition": "aggregate_cpi = total simulation cycles / retired instructions; estimated_mips = 50 MHz / aggregate_cpi",
+    "not_a_standard_benchmark": "The score is not CoreMark and is not measured by a physical board timer."
+  },
+  "scores": [
+    {
+      "architecture": "single-cycle",
+      "status": "pass",
+      "programs": 114,
+      "retired_instructions": 18099,
+      "cycles": 18115,
+      "aggregate_cpi": 1.000884,
+      "estimated_mips_at_50mhz": 49.9558,
+      "td_setup_wns_ns": 0.463,
+      "td_hold_wns_ns": 0.073,
+      "td_setup_tns_ns": 0.0,
+      "td_hold_tns_ns": 0.0,
+      "td_sta_coverage_percent": 92.36,
+      "td_lut6": 2004,
+      "td_registers": 2529
+    },
+    {
+      "architecture": "multi-cycle",
+      "status": "pass",
+      "programs": 114,
+      "retired_instructions": 18099,
+      "cycles": 54329,
+      "aggregate_cpi": 3.001768,
+      "estimated_mips_at_50mhz": 16.6568,
+      "td_setup_wns_ns": 7.284,
+      "td_hold_wns_ns": 0.034,
+      "td_setup_tns_ns": 0.0,
+      "td_hold_tns_ns": 0.0,
+      "td_sta_coverage_percent": 92.24,
+      "td_lut6": 2727,
+      "td_registers": 3532
+    },
+    {
+      "architecture": "two-stage-pipeline",
+      "status": "pass",
+      "programs": 114,
+      "retired_instructions": 18099,
+      "cycles": 20434,
+      "aggregate_cpi": 1.129013,
+      "estimated_mips_at_50mhz": 44.2865,
+      "td_setup_wns_ns": 0.696,
+      "td_hold_wns_ns": 0.039,
+      "td_setup_tns_ns": 0.0,
+      "td_hold_tns_ns": 0.0,
+      "td_sta_coverage_percent": 92.85,
+      "td_lut6": 2837,
+      "td_registers": 3333
+    }
+  ],
+  "deployed_architecture": "single-cycle",
+  "programming": {
+    "status": "pass",
+    "mode": "SRAM only",
+    "transport": "OpenOCD remote_bitbang with vendor SRAM SVF and strict TDO checking",
+    "jtag_idcode": "4808f0e7",
+    "bitstream_sha256": "83ea9b12cdbf205f59801e1556e38d73ba7514530e630e82f1a7ce7a32fe51f7",
+    "svf_sha256": "911cee2e9031214a6b7536ba29b6fc94838b61eafc114ca2fd24f68a10932872"
+  },
+  "hardware_readback": {
+    "status": "not_captured",
+    "detail": "The board SoC serializes its ROM/RAM signature on R11; no external logic analyzer capture was available. JTAG confirms the FPGA was configured, while the functional score above comes from the independent RTL benchmark."
+  }
+}
