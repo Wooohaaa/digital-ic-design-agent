@@ -90,6 +90,8 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
     add('DV-001','verification','pass' if valid_sim else 'blocked',reason,
         '' if valid_sim else 'Run /verify and resolve the first failing counterexample.',['reports/simulation.json'])
     cpu = manifest.get('verification',{}).get('kind') == 'riscv-retire'
+    tinyllm = manifest.get('verification',{}).get('kind') == 'tinystories-fp32'
+    independent = cpu or tinyllm
     if cpu:
         traceable = valid_sim
         detail = f"Independent retirement/store/memory comparison: {simulation.get('case_count',0)} cases, {simulation.get('seeds',0)} random seeds."
@@ -104,9 +106,9 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         detail = f'{len(checks)} runtime checks mapped to {len(requirements)} planned requirements.'
     add('DV-002','verification','pass' if traceable else 'blocked',detail,
         '' if traceable else 'Create spec/verification-plan.json and execute every CHECK REQ-NNN PASS assertion.',['spec/verification-plan.json','reports/simulation.json'])
-    add('DV-003','verification','pass' if cpu and valid_sim else 'blocked',
-        'Trusted reference and harness are fingerprinted.' if cpu else 'RTL and testbench share the generation path; independent verification has not been established.',
-        '' if cpu and valid_sim else 'Review the verification plan and supply an independent reference/checker.',['reports/simulation.json'])
+    add('DV-003','verification','pass' if independent and valid_sim else 'blocked',
+        'Trusted reference and harness are fingerprinted.' if independent else 'RTL and testbench share the generation path; independent verification has not been established.',
+        '' if independent and valid_sim else 'Review the verification plan and supply an independent reference/checker.',['reports/simulation.json'])
     try:
         valid_lint = lint.get('status') == 'pass' and lint.get('returncode') == 0 and lint.get('inputs') == lint_inputs(project,manifest)
     except (OSError,ValueError,KeyError):
@@ -135,13 +137,19 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
     add('DV-004','verification','not_run',
         'Code/toggle coverage, formal properties/equivalence and post-route simulation are not evidenced by this flow.',
         'Select required analyses in the verification plan and collect tool-produced evidence.',required=False)
-    add('HW-001','integration','not_run','Physical board programming and measurement have not been performed.',
-        'Program the board and record observed outputs against the hardware acceptance procedure.',required=False)
+    hardware_ok=False
+    hardware_detail='Physical board programming and measurement have not been performed.'
+    if tinyllm:
+        from .hardware_evidence import hardware_valid
+        hardware_ok,hardware_detail=hardware_valid(project,read_report(project/'reports/hardware.json'))
+    add('HW-001','integration','pass' if hardware_ok else 'not_run',hardware_detail,
+        '' if hardware_ok else 'Program the board and record observed outputs against the hardware acceptance procedure.',
+        ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else [],required=False)
     artifact_ready = valid_sim and (scope == 'simulation' or valid_td)
     report = {'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(),
               'project':manifest.get('project',project.name),'scope':scope,
               'artifact_ready':artifact_ready,'engineering_signoff':'not_granted',
-              'verification_profile':'trusted-rv32i-differential' if cpu else 'generated-self-check',
+              'verification_profile':'trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else 'generated-self-check',
               'gates':gates,'next_actions':[gate['next_action'] for gate in gates if gate['status'] != 'pass' and gate['next_action']],
               'required_open_items':sum(gate['required'] and gate['status'] != 'pass' for gate in gates)}
     if write:

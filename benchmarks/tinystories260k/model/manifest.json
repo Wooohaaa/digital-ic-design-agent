@@ -1,0 +1,21 @@
+{
+  "source": "https://huggingface.co/karpathy/tinyllamas/tree/main/stories260K",
+  "license": "MIT",
+  "sha256": {
+    "stories260K.bin": "b0a507e7ad0f626624f17112325e66691f9076d622e1d3274d103d00299f2696",
+    "tok512.bin": "037cb335abb25d1fa9e8ecae30ed2a3a8ace9302862ebcdc05d51a6bbb10c312"
+  },
+  "config": [
+    64,
+    172,
+    5,
+    8,
+    4,
+    512,
+    512
+  ],
+  "bytes": 1056540,
+  "deployment_context": 64,
+  "checkpoint_context": 512,
+  "quantization": "none; FP32"
+}

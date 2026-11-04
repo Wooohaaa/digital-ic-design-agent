@@ -1,0 +1,9 @@
+set_pin_assignment { I_sys_clk } { LOCATION = C4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { I_uart_rx } { LOCATION = J1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_uart_tx } { LOCATION = H1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { I_flash_miso } { LOCATION = D16; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_flash_mosi } { LOCATION = E13; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_flash_clk } { LOCATION = N6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_flash_cs_n } { LOCATION = D14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_flash_wp_n } { LOCATION = C16; IOSTANDARD = LVCMOS33; }
+set_pin_assignment { O_flash_hold_n } { LOCATION = A13; IOSTANDARD = LVCMOS33; }

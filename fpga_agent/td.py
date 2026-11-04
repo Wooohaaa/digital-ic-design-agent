@@ -62,6 +62,32 @@ def _as_text(value: str | bytes | None) -> str:
     return str(value)
 
 
+def memory_image_aliases(project: Path, manifest: dict, run_dir: Path) -> dict[str,str]:
+    """TD resolves readmem paths relative to the declaring HDL before project dir.
+
+    Keep canonical source snapshots and create byte-identical runtime aliases;
+    never rewrite the verified RTL or resolve back to the live project tree.
+    """
+    aliases={}
+    root=run_dir.resolve()
+    for name in hdl_input_hashes(project,manifest['rtl_sources']):
+        if Path(name).suffix.lower() not in {'.v','.sv','.vh','.svh'}: continue
+        text=re.sub(r'/\*.*?\*/|//[^\r\n]*',' ',(project/name).read_text(encoding='utf-8'),flags=re.S)
+        for argument in re.findall(r'\$readmem[hb]\s*\(\s*"([^"\r\n]+)"',text):
+            if Path(argument).is_absolute():
+                raise ValueError('Absolute memory image paths cannot be isolated in a TD snapshot: '+name)
+            original=(project/argument).resolve()
+            if project.resolve() not in original.parents or not original.is_file():
+                raise ValueError('Memory image outside project or missing: '+argument)
+            alias=(root/'sources'/Path(name).parent/argument).resolve()
+            if root not in alias.parents: raise ValueError('TD memory alias escapes snapshot')
+            relative=alias.relative_to(root).as_posix()
+            source=original.relative_to(project.resolve()).as_posix()
+            if relative in aliases and aliases[relative]!=source: raise ValueError('TD memory alias collision')
+            aliases[relative]=source
+    return aliases
+
+
 def build_tcl(project: Path, stage: str) -> tuple[Path, Path]:
     manifest = load_manifest(project)
     if not re.fullmatch(r"[A-Za-z0-9_]+", manifest.get("device_family", "")) or not re.fullmatch(
@@ -92,6 +118,10 @@ def build_tcl(project: Path, stage: str) -> tuple[Path, Path]:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, destination)
         copied_inputs.append((Path("sources") / Path(name).as_posix(), destination))
+    for alias,source in memory_image_aliases(project,manifest,run_dir).items():
+        target=run_dir/alias
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(project/source,target)
     lines = [
         f"set project_name {_tcl_braced(project_name)}",
         f"set project_dir {_tcl_braced(run_dir.as_posix())}",
@@ -113,6 +143,7 @@ def build_tcl(project: Path, stage: str) -> tuple[Path, Path]:
     if stage == "full":
         lines.extend(
             [
+                "set_param -run phy_1 route fix_hold on",
                 "launch_runs phy_1",
                 "wait_run phy_1 -quiet",
             ]

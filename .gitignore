@@ -20,3 +20,6 @@ deliverables/
 **/generation/**/verification.json
 *.log
 *.logw
+benchmarks/*/firmware/*.elf
+benchmarks/*/firmware/*.map
+benchmarks/*/firmware/firmware.bin

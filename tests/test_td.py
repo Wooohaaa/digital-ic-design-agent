@@ -61,6 +61,22 @@ class TdTests(unittest.TestCase):
         self.assertIn('set project_dir "', tcl_text)
         self.assertIn("add_files \"sources/rtl/core.v\"", tcl_text)
 
+    def test_full_flow_enables_hold_repair_before_placement(self) -> None:
+        script, _ = build_tcl(self.project, 'full')
+        text = script.read_text(encoding='utf-8')
+        self.assertLess(text.index('set_param -run phy_1 route fix_hold on'),
+                        text.index('launch_runs phy_1'))
+
+    def test_readmem_snapshot_alias_keeps_exact_image_bytes(self) -> None:
+        image = self.project / 'firmware' / 'rom.hex'
+        image.parent.mkdir()
+        image.write_bytes(b'00000013\r\n0000006f\r\n')
+        source = self.project / 'rtl' / 'core.v'
+        source.write_text('module core; reg [31:0] rom[0:1]; initial $readmemh("firmware/rom.hex",rom); endmodule\n')
+        _, run = build_tcl(self.project, 'synth')
+        self.assertEqual((run/'sources/firmware/rom.hex').read_bytes(),image.read_bytes())
+        self.assertEqual((run/'sources/rtl/firmware/rom.hex').read_bytes(),image.read_bytes())
+
     def _run_full_with_report(self, report: str, bitstream: bool = True):
         executable = self.root / "td_commands_prompt.exe"
         executable.write_text("", encoding="utf-8")

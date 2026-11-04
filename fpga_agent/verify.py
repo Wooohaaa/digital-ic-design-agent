@@ -55,6 +55,14 @@ def _as_text(value: str | bytes | None) -> str:
 def verify_project(project: Path, timeout: int = 120) -> SimulationResult:
     manifest = load_manifest(project)
     verification = manifest.get("verification", {})
+    if isinstance(verification,dict) and verification.get('kind')=='tinystories-fp32':
+        from .tinyllm import verify_project as verify_tiny
+        report=verify_tiny(project)
+        return SimulationResult(status=report['status'],simulator=report['simulator'],command=[],
+            output=report.get('runtime_output',''),returncode=report['returncode'],
+            started_at=report['started_at'],elapsed_seconds=report['elapsed_seconds'],
+            source_hashes=report['source_hashes'],evidence_version=report['evidence_version'],
+            verification_inputs=report['verification_inputs'],checks=report['checks'])
     if isinstance(verification, dict) and verification.get("kind") == "riscv-retire":
         # Import lazily so generic projects do not depend on the RV32 benchmark flow.
         from .cpu_bench import run_benchmark

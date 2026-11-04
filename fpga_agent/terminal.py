@@ -30,6 +30,7 @@ COMMANDS = {
     "/diff": "查看 Git 差异", "/model": "切换模型：/model name",
     "/provider": "切换接口：api / chat / codex / exchange",
     "/theme": "选择终端主题",
+    "/tinyllm": "TinyStories260K 工程：/tinyllm name --full",
     "/logo": "选择 ICFORGE 字标",
     "/plan": "切换 Plan / Build", "/run": "执行待运行计划",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
@@ -244,14 +245,16 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
     if action == "suite":
         commands = [cli + ["cpu-suite", "--root", str(workspace.root / "benchmarks")] + (["--full"] if full else [])]
         return TaskPlan("RISC-V benchmark suite", commands)
-    if action not in {"init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "replay", "lint", "review"}:
+    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review"}:
         raise ValueError(f"不支持的工具：{action}")
     if not project:
         raise ValueError("先使用 /project 选择工程，或 /init name 创建工程。")
-    if action in {"init", "design", "cpu-design"}:
+    if action in {"init", "design", "cpu-design", "tinyllm"}:
         from .project import safe_project_name
         safe_project_name(project.name)
-    if action == "init":
+    if action == "tinyllm":
+        commands=[cli+["tinyllm",str(project)]+([] if (project/'project.json').is_file() else ["--prepare"])+(["--full"] if full else [])]
+    elif action == "init":
         commands = [cli + ["init", project.name, "--directory", str(project.parent)]]
     elif action in {"cpu-design", "replay"}:
         architecture = arguments.get("architecture", "multi")

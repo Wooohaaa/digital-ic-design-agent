@@ -1,0 +1,1 @@
+#define MODEL_CRC32 0x53c34099u

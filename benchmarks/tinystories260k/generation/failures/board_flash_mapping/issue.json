@@ -1,0 +1,7 @@
+{
+  "issue": "Configuration Flash mistaken for independent user storage",
+  "observed": "TD start_timer access violation reproduced with minimal counter and R15 assignment",
+  "cause": "R15 is dedicated CCLK on PH1P35; original schematic labels GD25WQ128 as FPGA configuration interface",
+  "fix": "Use N25Q128: D14/N6/E13/D16/C16/A13; reject all JEDEC IDs except 20ba18; never write configuration Flash",
+  "validation": "Full RTL inference, TD STA and actual JEDEC/CRC/logits/story acceptance passed"
+}

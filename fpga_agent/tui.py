@@ -38,6 +38,7 @@ HELP = """### 在终端完成设计闭环
 | `/design 需求` | 生成普通 RTL + 自检仿真 |
 | `/design --full 需求` | 生成、仿真、TD 实现、交付 |
 | `/cpu name multi --full` | 新建 RV32I CPU；架构 single / multi / pipeline |
+| `/tinyllm name --full` | TinyStories260K 参考验证、RTL 仿真与 FPGA 实现 |
 | `/verify` · `/synth` · `/td` | 仿真、综合、完整实现 |
 | `/lint` · `/review` | 严格 RTL lint、工程审查与阻塞项 |
 | `/flow` · `/package` | 完整流程、交付；支持 --simulation-only |
@@ -592,7 +593,7 @@ class ForgeApp(App):
         else:
             action = command.lstrip("/")
             arguments: dict = {"full": "--full" in tokens}
-            if action in ("init", "cpu"):
+            if action in ("init", "cpu", "tinyllm"):
                 if not tokens:
                     raise ValueError("用法：/init name 或 /cpu name multi --full")
                 arguments["project"] = tokens[0]

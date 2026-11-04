@@ -1,0 +1,25 @@
+{
+  "model": "gpt-6-luna",
+  "issue": "The SPI receiver reset bit_count and receive_shift on every falling SCLK edge after the command, so the data phase never reached 32 sampled bits and ready never asserted.",
+  "failure": {
+    "artifact": "generation/failures/spi_initial/actual.txt",
+    "actual": "SPI watchdog: no ready after 600 cycles on the first read request.",
+    "required": "Complete 0x03 command/address plus 32-bit data receive, return little-endian word, and pulse ready once per accepted request."
+  },
+  "repair": "Added an explicit data_started phase flag. It is cleared on reset and at request acceptance, then set only once on the first falling SCLK edge after command_done. Receive count and shift state are initialized on that transition only; subsequent data-phase falling edges no longer clear the sampled bits or counter.",
+  "source_sha256": {
+    "before": "5edd23517ff02d0190908bb3f6dd54b92a2740c0d56ed8f2240dc3cd4bc8bbc9",
+    "after": "3f4c2fd076910eb481ab5ba0334c9e9625ebcfc5e1667e47993513069b530698"
+  },
+  "verification": {
+    "command": ".tools/icarus/bin/iverilog.exe -g2012 -s tb_io -o .fpga-agent/tinystories/io.vvp benchmarks/tinystories260k/rtl/luna_io.v fpga_agent/templates/tinystories260k/tb/tb_io.v; .tools/icarus/bin/vvp.exe .fpga-agent/tinystories/io.vvp",
+    "status": "pass",
+    "checks": [
+      "CHECK REQ-001 PASS",
+      "CHECK REQ-002 PASS",
+      "CHECK REQ-003 PASS",
+      "PASS IO protocol and reset"
+    ],
+    "scope": "Independent Icarus IO testbench only; no synthesis, place-and-route, FPGA programming, or physical-hardware validation."
+  }
+}

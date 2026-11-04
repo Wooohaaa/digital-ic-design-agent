@@ -1,0 +1,82 @@
+{
+  "project": "tinystories260k",
+  "top_module": "tinystories_soc",
+  "testbench_top": "tb_io",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "board": "HX1P35A HDL2604",
+  "rtl_sources": [
+    "rtl/luna_rv32.v",
+    "rtl/luna_io.v",
+    "rtl/tinystories_soc.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_io.v"
+  ],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "board_io": {
+    "I_sys_clk": "I_sys_clk",
+    "I_uart_rx": "I_uart_rx",
+    "O_uart_tx": "O_uart_tx",
+    "I_flash_miso": "I_flash_miso",
+    "O_flash_mosi": "O_flash_mosi",
+    "O_flash_clk": "O_flash_clk",
+    "O_flash_cs_n": "O_flash_cs_n",
+    "O_flash_wp_n": "O_flash_wp_n",
+    "O_flash_hold_n": "O_flash_hold_n"
+  },
+  "top_ports": {
+    "I_sys_clk": "input",
+    "I_uart_rx": "input",
+    "O_uart_tx": "output",
+    "I_flash_miso": "input",
+    "O_flash_mosi": "output",
+    "O_flash_clk": "output",
+    "O_flash_cs_n": "output",
+    "O_flash_wp_n": "output",
+    "O_flash_hold_n": "output"
+  },
+  "unmapped_top_ports": [],
+  "td_full_allowed": true,
+  "checks": [
+    "SPI byte order, address and no duplicate held request",
+    "SPI reset recovery",
+    "UART 8N1 receive/transmit",
+    "RV32I retirement/store comparison under wait states",
+    "64-position independent FP32 logits comparison",
+    "Production firmware full RTL inference/logits",
+    "Context/checkpoint/token bounds rejection"
+  ],
+  "verification": {
+    "kind": "tinystories-fp32",
+    "context": 64,
+    "rtl_steps": 3,
+    "additional_inputs": [
+      "board/hx1p35a.json",
+      "firmware/inference.c",
+      "firmware/link.ld",
+      "firmware/model_contract.h",
+      "firmware/monitor.c",
+      "firmware/rom.hex",
+      "firmware/rope.h",
+      "firmware/start.S",
+      "model/manifest.json",
+      "model/stories260K.bin",
+      "model/tok512.bin",
+      "tb/sim_main.cpp",
+      "tb/tiny_sim.v"
+    ]
+  },
+  "model_backend": {
+    "transport": "current-session Luna generation + exchange bridge",
+    "model": "gpt-6-luna",
+    "components": [
+      "CPU RTL",
+      "SPI NOR reader RTL",
+      "UART RTL"
+    ],
+    "integration": "IC Forge host engineering harness"
+  },
+  "td_status": "full"
+}

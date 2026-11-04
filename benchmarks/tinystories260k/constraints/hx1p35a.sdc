@@ -1,0 +1,6 @@
+create_clock -name sys_clk_50m -period 20.000 [get_ports {I_sys_clk}]
+set_false_path -from [get_ports {I_uart_rx}]
+set_input_delay -clock sys_clk_50m -max 8.0 [get_ports {I_flash_miso}]
+set_input_delay -clock sys_clk_50m -min 0.0 [get_ports {I_flash_miso}]
+set_output_delay -clock sys_clk_50m -max 2.0 [get_ports {O_flash_* O_uart_tx}]
+set_output_delay -clock sys_clk_50m -min 0.0 [get_ports {O_flash_* O_uart_tx}]

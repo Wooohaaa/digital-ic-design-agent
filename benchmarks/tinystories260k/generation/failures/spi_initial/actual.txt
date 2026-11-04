@@ -1,0 +1,2 @@
+FATAL: fpga_agent/templates/tinystories260k/tb/tb_io.v:28: SPI watchdog: no ready after 600 cycles
+       Time: 12120000  Scope: tb_io.read_word

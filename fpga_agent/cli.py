@@ -134,6 +134,10 @@ def do_td(project: Path, stage: str, td_root: str | None) -> int:
         snapshot=run_dir/'sources'/name
         if not snapshot.is_file() or sha(snapshot)!=build_inputs.get(name):
             code=1;output+=f'\nTD source snapshot mismatch: {name}\n'
+    from .td import memory_image_aliases
+    for alias,source in memory_image_aliases(project,manifest,run_dir).items():
+        if not (run_dir/alias).is_file() or sha(run_dir/alias)!=build_inputs.get(source):
+            code=1;output+=f'\nTD runtime memory image mismatch: {alias}\n'
     project_name = f"{manifest['project']}_{stage}"
     runs_dir = run_dir / f"{project_name}_Runs"
     bitstreams = [p.relative_to(project).as_posix() for p in runs_dir.glob("phy_1/*.bit")]
@@ -231,7 +235,7 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
         return text
 
     with zipfile.ZipFile(pending, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for folder in ("rtl", "tb", "constraints", "board", "spec", "reports"):
+        for folder in ("rtl", "tb", "constraints", "board", "spec", "reports", "firmware", "model"):
             root = project / folder
             if root.exists():
                 for path in root.rglob("*"):
@@ -354,6 +358,17 @@ def parser() -> argparse.ArgumentParser:
     cpu.add_argument('--repair-rounds',type=int,default=2)
     cpu.add_argument('--seeds',type=int,default=64)
     cpu.add_argument('--full',action='store_true')
+    tiny=commands.add_parser('tinyllm',help='TinyStories260K 独立参考、Luna RTL、生产固件仿真与 FPGA 实现')
+    tiny.add_argument('project')
+    tiny.add_argument('--prepare',action='store_true',help='创建工作负载工程并核验模型/板卡资料')
+    tiny.add_argument('--board-docs',type=Path)
+    tiny.add_argument('--model-dir',type=Path)
+    tiny.add_argument('--full',action='store_true',help='验证通过后运行 TD 并打包；不等同于实板通过')
+    tiny.add_argument('--port',help='使用现有有效验证/下载证据做实板验收，如 COM5 或 ftdi://123456789B')
+    tiny.add_argument('--upload-model',action='store_true',help='把模型写入独立用户 N25Q128 Flash（需要 --port）')
+    tiny.add_argument('--prompt',default='Once upon a time')
+    tiny.add_argument('--new-tokens',type=int,default=8)
+    tiny.add_argument('--program',action='store_true',help='通过现有 AL-LINK-FT:5555 服务下载已验收的 SRAM 位流')
     suite=commands.add_parser('cpu-suite',help='independent RV32I regression across prepared CPU designs')
     suite.add_argument('--root',default='benchmarks')
     suite.add_argument('--full',action='store_true')
@@ -389,6 +404,34 @@ def main(argv: list[str] | None = None) -> int:
                 code=do_td(project,'full',None)
                 if code:return code
                 return do_package(project)
+            return 0
+        if args.command=='tinyllm':
+            from .tinyllm import prepare,verify_project as verify_tiny
+            project=Path(args.project).resolve()
+            if args.upload_model and not args.port:
+                raise ValueError('--upload-model requires --port')
+            if args.program:
+                if args.prepare or args.full:
+                    raise ValueError('--program uses existing verified artifacts; run --full first')
+                from .programmer import program_sram
+                print(json.dumps(program_sram(project),ensure_ascii=False,indent=2))
+                if not args.port:
+                    return 0
+            if args.port:
+                if args.prepare or args.full:
+                    raise ValueError('--port uses existing verified artifacts; run --prepare/--full separately first')
+                from .tinyllm_hardware import hardware_run
+                report=hardware_run(project,args.port,upload=args.upload_model,
+                                    prompt=args.prompt,new_tokens=args.new_tokens)
+                print(json.dumps(report,ensure_ascii=False,indent=2))
+                return 0 if report.get('status')=='pass' else 1
+            if args.prepare:
+                prepare(project,board_docs=args.board_docs,source=args.model_dir)
+            report=verify_tiny(project)
+            print(json.dumps({k:v for k,v in report.items() if k in ('status','elapsed_seconds','rtl')},ensure_ascii=False,indent=2))
+            if args.full:
+                code=do_td(project,'full',None)
+                return code if code else do_package(project)
             return 0
         if args.command=='cpu-suite':
             from .cpu_bench import run_benchmark

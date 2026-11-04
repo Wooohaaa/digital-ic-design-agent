@@ -1,0 +1,90 @@
+{
+  "status": "pass",
+  "completed_at": "2026-11-04T13:07:11.515326+00:00",
+  "model": "TinyStories260K FP32",
+  "clock_hz": 50000000,
+  "context": 64,
+  "independent_native": {
+    "logits_compared": 32768,
+    "max_absolute_error": 1.2874603271484375e-05,
+    "argmax_matches": 64,
+    "bounds": "pass"
+  },
+  "cpu": {
+    "cases": 114,
+    "variable_memory_wait_states": true
+  },
+  "rtl": {
+    "status": "pass",
+    "steps": 3,
+    "logits_compared": 1536,
+    "max_absolute_error": 9.5367431640625e-06,
+    "argmax": [
+      403,
+      276,
+      259
+    ],
+    "cycles": 2295173792,
+    "spi_reads": 1044430,
+    "actual_io": "SPI mode0 plus UART115200, production firmware/ROM",
+    "output_sha256": "2569cad5fd64e9b20bc7edf747552f2deb0f41ebc288ce9acc44d7b19d19dfbc"
+  },
+  "timing": {
+    "setup_wns_ns": 2.838,
+    "setup_tns_ns": 0.0,
+    "hold_wns_ns": 0.072,
+    "hold_tns_ns": 0.0
+  },
+  "sta_coverage_percent": 99.99,
+  "resources": {
+    "lut6": {
+      "used": 2393,
+      "available": 21216
+    },
+    "eram": {
+      "used": 64,
+      "available": 108
+    },
+    "dsp": {
+      "used": 0,
+      "available": 40
+    },
+    "pad": {
+      "used": 9,
+      "available": 160
+    },
+    "reg": {
+      "used": 1647,
+      "available": null
+    }
+  },
+  "hardware": {
+    "jedec_id": "0020ba18",
+    "flash_crc32": "53c34099",
+    "model_sha256": "b0a507e7ad0f626624f17112325e66691f9076d622e1d3274d103d00299f2696",
+    "diagnostic_logits_count": 1536,
+    "diagnostic_max_absolute_error": 9.5367431640625e-06,
+    "diagnostic_argmax_tokens": [
+      403,
+      276,
+      259
+    ],
+    "prompt": "Once upon a time",
+    "story": "Once upon a time, there was a little girl",
+    "generated_token_ids": [
+      432,
+      383,
+      286,
+      261,
+      376,
+      298,
+      315,
+      421
+    ],
+    "uart_transcript_sha256": "a7d7165d6c8633e8acacc7da87ab8c32078d96f149b7b1a199e3539cca2ec2ac"
+  },
+  "bitstream_sha256": [
+    "ae80c5a88781c2451f3c0cbdb993053ea53e91f376847f85e191d602b149ec97"
+  ],
+  "engineering_signoff": "not_granted; see engineering review and IO/board assumptions"
+}

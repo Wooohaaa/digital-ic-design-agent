@@ -1,6 +1,6 @@
 # IC Forge — Digital IC Design Agent
 
-0.3 提供终端交互工作台：对话设计、工程切换、实时工具日志、验证证据、文件预览和可恢复会话。Python 3.11+ 安装后直接运行：
+提供终端交互工作台：对话设计、工程切换、实时工具日志、验证证据、文件预览和可恢复会话。Python 3.11+ 安装后直接运行：
 
 ```powershell
 python -m pip install -e .
@@ -19,6 +19,8 @@ icforge
 本轮由 **gpt-6-luna** 生成了单周期、多周期、两级流水线三份 RV32I CPU。每份通过 114 个程序、18,099 条指令提交比对、片上 ROM/RAM 签名测试和 50 MHz TD 实现。实测表格见 [riscv-results.md](docs/riscv-results.md)，接口和覆盖范围见 [riscv-flow.md](docs/riscv-flow.md)。
 
 ## 模型与验证
+
+TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比，输出 `Once upon a time, there was a little girl`。模型、生产固件、SPI/UART 完整 RTL 推理和实板证据流程见 [TinyStories 工程试验](docs/tinystories-flow.md)。
 
 - `exchange`：本轮临时模型后端。当前会话的 Luna 子代理生成实际响应，再通过带模型标识的文件导入 agent；请求、响应、指纹和修复记录都保留。
 - `api`：OpenAI Responses API，默认模型 `gpt-6-luna`，需要 API Key；`chat` 为显式兼容接口。

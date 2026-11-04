@@ -56,6 +56,14 @@ def simulation_input_hashes(project: Path, manifest: dict) -> dict[str, str]:
     for name in ('spec/brief.md', 'spec/design.md', 'spec/verification-plan.json'):
         if (project / name).is_file():
             result[name] = sha(local_file(project, name))
+    # Mixed hardware/software workloads depend on firmware, checkpoints and host
+    # checkers as well as HDL. Resolve every declared dependency inside project.
+    extra=manifest.get('verification',{}).get('additional_inputs',[])
+    if not isinstance(extra,list) or any(not isinstance(name,str) for name in extra):
+        raise ValueError('verification.additional_inputs must be a list of local paths')
+    for name in extra:
+        path=local_file(project,name)
+        result[path.relative_to(project.resolve()).as_posix()]=sha(path)
     config = {key: manifest.get(key) for key in ('top_module', 'testbench_top', 'rtl_sources',
               'testbench_sources', 'verification', 'checks', 'board_signature', 'trusted_testbench_hashes')}
     result['@simulation_config'] = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
@@ -96,6 +104,9 @@ def simulation_valid(project: Path,manifest: dict,report: dict) -> tuple[bool,st
     if report.get('evidence_version') != EVIDENCE_VERSION:return False,'simulation evidence schema changed; rerun verification'
     if report.get('verification_inputs') != simulation_input_hashes(project,manifest):return False,'verification configuration, specification or dependencies changed'
     if type(report.get('returncode')) is not int or report['returncode'] != 0:return False,'simulator exit status is not successful'
+    if manifest.get('verification',{}).get('kind')=='tinystories-fp32':
+        from .tinyllm import evidence_valid
+        return evidence_valid(project,manifest,report)
     if manifest.get('verification',{}).get('kind')=='riscv-retire':
         from .cpu_bench import trusted_hashes
         if report.get('verification_kind')!='riscv-retire':return False,'trusted RV32I differential verification missing'
@@ -144,6 +155,11 @@ def implementation_valid(project: Path,manifest: dict,report: dict) -> tuple[boo
         for name in list(hdl_input_hashes(project,manifest['rtl_sources']))+[manifest['board_constraints'],manifest['timing_constraints']]:
             snapshot=run/'sources'/name
             if not snapshot.is_file() or sha(snapshot)!=recorded.get(name):return False,'implementation source snapshot missing or modified'
+        from .td import memory_image_aliases
+        for alias,source in memory_image_aliases(project,manifest,run).items():
+            snapshot=run/alias
+            if not snapshot.is_file() or sha(snapshot)!=recorded.get(source):
+                return False,'TD runtime memory image missing or modified'
         raw_timing=run/f"{manifest['project']}_full_Runs"/'phy_1/final_timing.rpt'
         if not raw_timing.is_file():return False,'raw final timing report missing'
         from .td import parse_timing_summary

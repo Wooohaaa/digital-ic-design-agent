@@ -1,0 +1,32 @@
+{
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "requirement": "SPI byte order, address and no duplicate held request"
+    },
+    {
+      "id": "REQ-002",
+      "requirement": "SPI reset recovery"
+    },
+    {
+      "id": "REQ-003",
+      "requirement": "UART 8N1 receive/transmit"
+    },
+    {
+      "id": "REQ-004",
+      "requirement": "RV32I retirement/store comparison under wait states"
+    },
+    {
+      "id": "REQ-005",
+      "requirement": "64-position independent FP32 logits comparison"
+    },
+    {
+      "id": "REQ-006",
+      "requirement": "Production firmware full RTL inference/logits"
+    },
+    {
+      "id": "REQ-007",
+      "requirement": "Context/checkpoint/token bounds rejection"
+    }
+  ]
+}

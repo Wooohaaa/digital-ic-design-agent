@@ -11,7 +11,7 @@ from .terminal import redact, write_json
 SCHEMA = {
     "type": "object", "properties": {
         "message": {"type": "string"},
-        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "suite", "lint", "review"]},
+        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "suite", "lint", "review"]},
         "arguments": {"type": "object", "properties": {
             "project": {"type": "string"}, "brief": {"type": "string"},
             "architecture": {"type": "string", "enum": ["single", "multi", "pipeline"]},
@@ -24,6 +24,8 @@ PROMPT = """You are IC Forge, a practical digital IC design agent inside a termi
 Respond in the user's language, preferably concise Chinese. Return JSON matching the schema.
 Answer engineering questions in message. If the user requests work, select ONE available typed tool.
 Tools: init creates a template; design generates generic Verilog/testbench with simulation and repairs;
+tinyllm prepares/verifies the fixed TinyStories260K FP32 RV32I/SPI reference profile on HX1P35A,
+limited to 64 tokens, with host tokenization and board inference. full adds TD/package, not hardware validation.
 cpu-design generates a new RV32I CPU and independent verification; verify runs existing tests;
 synth runs TD synthesis; td runs synthesis and route; flow verifies, implements and packages existing RTL;
 package packages verified results; suite tests existing three CPU benchmarks. none is conversational.

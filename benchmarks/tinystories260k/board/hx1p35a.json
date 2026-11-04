@@ -1,0 +1,78 @@
+{
+  "board": "HX1P35A HDL2604 documentation set",
+  "device": "PH1P35MDG324",
+  "device_family": "ph1",
+  "nominal_system_clock_hz": 50000000,
+  "source_documents": {
+    "新HX1P35A开发板手册-HDL版2604.pdf": "7b7a65b0212db35cb89a5dff6e80ae6cedf4ef697c0e61e20829c0dc801468d4",
+    "HX1P35B开发板引脚分配汇总.docx": "487f4adeaa726ac9d676e4348c88a1446a4befdb40d29184fed3cc5c479d9cfb",
+    "开发板原理图/HX1P35B_FT_40P_8.pdf": "403e6dc2bf4952c060f3f5b5e0ccc9533e840e2c096c7c9563bc1a4a654c935c"
+  },
+  "reviewed_pages": {
+    "manual": [
+      6,
+      12,
+      21,
+      22
+    ],
+    "schematic": "sheet 9 / file 8"
+  },
+  "revision_note": "Manual title A, schematic/pin table B; physical board label still requires inspection.",
+  "signals": {
+    "I_sys_clk": {
+      "pin": "C4",
+      "direction": "input",
+      "io_standard": "LVCMOS33"
+    },
+    "I_uart_rx": {
+      "pin": "J1",
+      "direction": "input",
+      "io_standard": "LVCMOS33"
+    },
+    "O_uart_tx": {
+      "pin": "H1",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    },
+    "I_flash_miso": {
+      "pin": "D16",
+      "direction": "input",
+      "io_standard": "LVCMOS33"
+    },
+    "O_flash_mosi": {
+      "pin": "E13",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    },
+    "O_flash_clk": {
+      "pin": "N6",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    },
+    "O_flash_cs_n": {
+      "pin": "D14",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    },
+    "O_flash_wp_n": {
+      "pin": "C16",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    },
+    "O_flash_hold_n": {
+      "pin": "A13",
+      "direction": "output",
+      "io_standard": "LVCMOS33"
+    }
+  },
+  "known_legacy_conflicts": {
+    "R10": "Ethernet TXEN; not reset",
+    "R11": "Ethernet TXD0; not screen PWM"
+  },
+  "flash": {
+    "user": "N25Q128; QSPI_CS/D0/D1/D2/D3/CLK",
+    "configuration": "GD25WQ128; R8/U12/V12/V11/U11/R15; never write",
+    "jedec_id": "20ba18"
+  },
+  "reset": "internal 255-cycle FPGA power-on counter; no external reset pin"
+}
