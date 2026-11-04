@@ -1,19 +1,13 @@
-$forge-bg: #171717;
-$forge-panel: #1b1b19;
-$forge-line: #ad795a;
-$forge-muted: #8e824a;
-$forge-accent: #ffd21f;
-$forge-violet: #e6bd67;
-
 Screen {
     background: $forge-bg;
-    color: #e7e4ce;
+    color: $forge-foreground;
 }
 
 #app-shell {
     height: 100%;
     width: 100%;
     padding: 0 2;
+    background: $forge-bg;
 }
 
 #transcript {
@@ -41,7 +35,7 @@ Screen {
 
 #welcome-title {
     height: auto;
-    color: #e7e4ce;
+    color: $forge-foreground;
 }
 
 #welcome-note {
@@ -55,7 +49,7 @@ Screen {
     height: auto;
     margin: 0 0 1 0;
     padding: 0 0 1 0;
-    border-bottom: solid #2a2922;
+    border-bottom: solid $forge-line;
     background: transparent;
 }
 
@@ -72,8 +66,8 @@ Screen {
 }
 
 .message.user .message-glyph { color: $forge-accent; }
-.message.assistant .message-glyph { color: $forge-violet; }
-.message.tool .message-glyph { color: #d4ad72; }
+.message.assistant .message-glyph { color: $forge-secondary; }
+.message.tool .message-glyph { color: $forge-success; }
 .message.system .message-glyph { color: $forge-muted; }
 
 .message-content {
@@ -83,7 +77,7 @@ Screen {
 
 .message-title {
     height: 1;
-    color: $forge-violet;
+    color: $forge-secondary;
     text-style: bold;
 }
 
@@ -95,14 +89,14 @@ Markdown {
     background: transparent;
 }
 
-MarkdownH1, MarkdownH2, MarkdownH3 { color: $forge-violet; }
-MarkdownFence { background: #20201c; }
+MarkdownH1, MarkdownH2, MarkdownH3 { color: $forge-accent; }
+MarkdownFence { background: $forge-code; }
 
 #task-status {
     display: none;
     height: 1;
     margin-bottom: 1;
-    color: $forge-accent;
+    color: $forge-highlight;
 }
 
 #logs {
@@ -111,7 +105,7 @@ MarkdownFence { background: #20201c; }
     margin-bottom: 1;
     padding: 0 1;
     border: round $forge-line;
-    background: #131311;
+    background: $forge-log;
     scrollbar-size: 1 1;
 }
 
@@ -157,7 +151,7 @@ MarkdownFence { background: #20201c; }
 }
 
 #prompt:focus { border: none; }
-TextArea > .text-area--cursor { background: #20bce8; color: $forge-bg; }
+TextArea > .text-area--cursor { background: $forge-bg; color: $forge-cursor; }
 
 #status-line {
     height: 1;
@@ -166,7 +160,7 @@ TextArea > .text-area--cursor { background: #20bce8; color: $forge-bg; }
     color: $forge-muted;
 }
 
-ModalScreen { align: center middle; background: #070b12 85%; }
+ModalScreen { align: center middle; background: $forge-overlay; }
 
 .dialog {
     width: 78;
@@ -174,7 +168,7 @@ ModalScreen { align: center middle; background: #070b12 85%; }
     max-height: 90%;
     height: auto;
     padding: 1 2;
-    border: round $forge-violet;
+    border: round $forge-secondary;
     background: $forge-panel;
 }
 
@@ -184,20 +178,24 @@ ModalScreen { align: center middle; background: #070b12 85%; }
     text-style: bold;
 }
 
-.dialog Input { background: $forge-bg; border: tall $forge-line; }
+.dialog Input { background: $forge-bg; border: tall $forge-line; color: $forge-foreground; }
 .dialog Input:focus { border: tall $forge-accent; }
 .muted { height: auto; color: $forge-muted; }
 
 #picker { height: 24; }
 #picker-options { height: 1fr; border: none; background: transparent; }
-OptionList > .option-list--option-highlighted { background: #1a222c; color: $forge-accent; }
+OptionList > .option-list--option-highlighted { background: $forge-selected; color: $forge-highlight; }
 OptionList:focus { border: none; }
+Scrollbar { background: $forge-bg; color: $forge-accent; }
 
 #connection { height: auto; }
-#connection Label { height: 1; margin-top: 1; color: #a7b0c4; }
-#connection Select { margin: 0; }
+#connection Label { height: 1; margin-top: 1; color: $forge-muted; }
+#connection Select { margin: 0; background: $forge-bg; color: $forge-foreground; border: tall $forge-line; }
+.dialog SelectCurrent, .dialog SelectOverlay { background: $forge-bg; color: $forge-foreground; }
+.dialog VerticalScroll { background: $forge-bg; }
 .dialog-buttons { height: 3; margin-top: 1; align: right middle; }
-.dialog-buttons Button { margin-left: 1; border: none; }
+.dialog-buttons Button { margin-left: 1; border: none; background: $forge-bg; color: $forge-accent; text-style: bold; }
+.dialog-buttons Button:hover { background: $forge-bg; color: $forge-secondary; }
 
 #preview { width: 100; height: 90%; }
 #preview VerticalScroll { height: 1fr; }

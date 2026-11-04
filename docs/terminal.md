@@ -20,7 +20,9 @@ ic-forge --continue
 ic-forge --resume <session-id>
 ```
 
-启动页使用终端字符 `█ ╔ ═ ║ ╚` 拼成大型立体 ICFORGE 字标，搭配金黄到铜色渐变。下方边框卡片左侧是字符芯片图案与模型/路径/会话信息，右侧列出实际工具、设计工作流和本机工具链状态。模型状态和输入行位于底部；首次发言后，启动卡片保留在对话滚动区上方。
+启动页使用终端字符拼成 ICFORGE 字标，搭配可选配色。下方边框卡片左侧是字符芯片图案与模型/路径/会话信息，右侧列出实际工具、设计工作流和本机工具链状态。模型状态和输入行位于底部；首次发言后，启动卡片保留在对话滚动区上方。输入 `/theme` 选择颜色主题，输入 `/logo` 选择字符字标；两项选择分别保存到当前工作区。
+
+主题只改变文字、字标、光标和线框颜色；终端内容区域始终保持纯黑背景。
 
 建议使用 110 × 36 或更大的窗口显示完整卡片；80 × 24 使用紧凑工具列表，更窄时改用五行字符字标，始终保留符号拼字和输入区。尊重终端 `NO_COLOR` 设置；如终端被配置为无色模式，可在自己的 PowerShell 中删除该环境变量后重开。无需特殊字体、Nerd Font 或图片资源；Windows Terminal 默认等宽字体即可。
 
@@ -61,6 +63,12 @@ Build 模式会执行用户请求对应的受支持工具。Plan 模式保留候
 沿用已有的 `OPENAI_API_KEY` / `OPENAI_BASE_URL` 环境变量即可接入 OpenAI Responses 接口；兼容 Chat Completions 的部署在 `/connect` 中选择 `chat`。所选接口需要支持 agent 使用的结构化 JSON 输出。对于只提供 `/v1/chat/completions` 的服务，必须选 `chat`，否则 `api` 会错误请求 `/v1/responses`。IC Forge 会发送自己的 User-Agent，避免部分 Cloudflare 网关将 Python 默认客户端识别为浏览器签名并返回 403 / 1010。`codex` 会使用本机已安装 Codex CLI 的登录状态；模型名必须是该账户实际支持的型号，本机此前对 gpt-6-luna 的 CLI 调用返回 model_not_found。不要把 CLI 登录支持和 API 模型权限混为一谈。
 
 不会自动读取其它 agent 的私有凭据或会话数据库；本版不提供 Claude、Hermes、OpenCode 私有会话格式的导入，也没有通用终端 shell / MCP 工具执行器。模型能调用的操作被限定在下述 IC 流程中，返回的文本不会当作 shell 或 Tcl 执行。
+
+## 配色与字标
+
+当前提供 Forge Gold、Rose Milk、Citrine Grove、Nord Frost、Tokyo Night、Catppuccin Mocha、Catppuccin Latte、Carbon Mint、Cobalt Signal 九套主题。Rose Milk 与 Citrine Grove 取色自用户给出的参考图；Nord、Tokyo Night、Catppuccin 主题沿用各项目公开调色板的色彩关系，并针对终端可读性做了界面映射。更多说明见 [TUI 主题与字标](tui-themes.md)。
+
+ICFORGE 字标可选 Block Forge、Isometric、Pixel Glitch 和 Minimal 四种；均由终端字符绘制，不依赖图片、额外字体或联网资源。
 
 ## 常用流程
 

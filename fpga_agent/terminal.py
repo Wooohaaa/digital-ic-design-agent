@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from .branding import LOGOS, THEMES
+
 PROVIDERS = ("api", "chat", "codex", "exchange")
 COMMANDS = {
     "/help": "快捷键与命令帮助", "/connect": "连接模型 / API 配置",
@@ -27,6 +29,8 @@ COMMANDS = {
     "/artifacts": "浏览交付与报告", "/files": "搜索与预览工程文件", "/open": "预览文件：/open rtl/core.v",
     "/diff": "查看 Git 差异", "/model": "切换模型：/model name",
     "/provider": "切换接口：api / chat / codex / exchange",
+    "/theme": "选择终端主题",
+    "/logo": "选择 ICFORGE 字标",
     "/plan": "切换 Plan / Build", "/run": "执行待运行计划",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
     "/export": "导出 Markdown 会话", "/cancel": "取消当前任务", "/quit": "退出",
@@ -66,6 +70,8 @@ class Settings:
     base_url: str = ""
     project: str = ""
     mode: str = "build"
+    theme: str = "forge"
+    logo: str = "block"
 
 
 @dataclass
@@ -99,6 +105,10 @@ class Workspace:
             result.provider = "api"
         if result.mode not in ("build", "plan"):
             result.mode = "build"
+        if result.theme not in THEMES:
+            result.theme = "forge"
+        if result.logo not in LOGOS:
+            result.logo = "block"
         return result
 
     def save_settings(self, settings: Settings) -> None:

@@ -24,7 +24,7 @@ from textual.widgets import Button, Input, Label, Markdown, OptionList, RichLog,
 from textual.widgets.option_list import Option
 
 from .terminal import COMMANDS, PROVIDERS, ProcessRunner, Session, TaskPlan, Workspace, evidence, make_plan, read_json, redact, write_json
-from .branding import wordmark, startup_panel
+from .branding import THEMES, LOGOS, logo_options, theme_options, wordmark, startup_panel
 from . import __version__
 
 HELP = """### 在终端完成设计闭环
@@ -33,6 +33,7 @@ HELP = """### 在终端完成设计闭环
 | 命令 | 作用 |
 | :--- | :--- |
 | `/connect` · `/model name` | 连接模型、切换模型 |
+| `/theme` · `/logo` | 切换配色主题、ICFORGE 字标 |
 | `/project` · `/init name` | 选择、创建工程 |
 | `/design 需求` | 生成普通 RTL + 自检仿真 |
 | `/design --full 需求` | 生成、仿真、TD 实现、交付 |
@@ -283,6 +284,12 @@ class ForgeApp(App):
         self.processing_queue = False
         self.task_status_generation = 0
 
+    def get_css_variables(self) -> dict[str, str]:
+        variables = super().get_css_variables()
+        theme = getattr(getattr(self, "settings", None), "theme", "forge")
+        variables.update(THEMES.get(theme, THEMES["forge"]).css_variables())
+        return variables
+
     def compose(self) -> ComposeResult:
         with Vertical(id="app-shell"):
             with VerticalScroll(id="transcript"):
@@ -302,6 +309,7 @@ class ForgeApp(App):
     async def on_mount(self) -> None:
         self.query_one("#logs").display = False
         self.query_one("#suggestions").display = False
+        self.refresh_css(animate=False)
         self.refresh_panels()
         for message in self.session.messages[-100:]:
             await self.render_message(message["role"], message["content"])
@@ -329,12 +337,13 @@ class ForgeApp(App):
         except FileNotFoundError:
             td_ready = False
         width = max(24, root.size.width - (2 if root.size.width < 95 else 4))
-        root.query_one('#wordmark', Static).update(wordmark(width))
+        root.query_one('#wordmark', Static).update(wordmark(width, self.settings.theme, self.settings.logo))
         root.query_one('#welcome-dashboard', Static).update(startup_panel(
             width=width, height=root.size.height, version=__version__,
             provider=self.settings.provider, model=self.settings.model,
             workspace=self.workspace.root, project=self.selected.name if self.selected else '',
             session=self.session.id, connected=self.model_ready(), command_count=len(COMMANDS),
+            theme=self.settings.theme, logo=self.settings.logo,
             toolchain={
                 'Icarus':bool(shutil.which('iverilog') or (Path(__file__).resolve().parent.parent/'.tools/icarus/bin/iverilog.exe').is_file()),
                 'Anlogic TD':td_ready, 'Verilator':bool(shutil.which('verilator')),
@@ -359,14 +368,15 @@ class ForgeApp(App):
     def refresh_panels(self) -> None:
         """Refresh the compact context line and the project list used by pickers."""
         ready = self.model_ready()
+        palette = THEMES.get(self.settings.theme, THEMES["forge"])
         self.project_paths = self.workspace.projects()
         status = Text()
-        status.append('● ' if ready else '○ ', style='#ffd21f' if ready else '#bd845f')
-        status.append(f'{self.settings.provider}/{self.settings.model}', style='#e7e4ce')
-        status.append(f'  ·  {self.settings.mode.upper()}', style='#8e824a')
-        status.append(f'  ·  {self.selected.name if self.selected else self.workspace.root.name}', style='#8e824a')
+        status.append('● ' if ready else '○ ', style=palette.highlight if ready else palette.warning)
+        status.append(f'{self.settings.provider}/{self.settings.model}', style=palette.foreground)
+        status.append(f'  ·  {self.settings.mode.upper()}', style=palette.muted)
+        status.append(f'  ·  {self.selected.name if self.selected else self.workspace.root.name}', style=palette.muted)
         if self.queued_input:
-            status.append(f"  ·  {len(self.queued_input)} queued", style="#efc884")
+            status.append(f"  ·  {len(self.queued_input)} queued", style=palette.warning)
         self.query_one("#status-line", Static).update(status)
         self.refresh_welcome()
 
@@ -472,6 +482,17 @@ class ForgeApp(App):
             await self.add_message("assistant", HELP)
         elif command == "/connect":
             self.push_screen(Connection(self.settings), self.connected)
+        elif command in ("/theme", "/logo"):
+            choices = theme_options() if command == "/theme" else logo_options()
+            title = "SELECT COLOR THEME" if command == "/theme" else "SELECT ICFORGE MARK"
+            callback = self.picked_theme if command == "/theme" else self.picked_logo
+            if rest:
+                if command == "/theme":
+                    await self.change_theme(rest.casefold())
+                else:
+                    await self.change_logo(rest.casefold())
+            else:
+                self.push_screen(Picker(title, choices), callback)
         elif command in ("/model", "/provider"):
             if not rest:
                 await self.add_message("system", f"当前模型：`{self.settings.provider} / {self.settings.model}`。使用 `/connect` 配置，或 `{command} 值` 修改。")
@@ -579,6 +600,33 @@ class ForgeApp(App):
         self.workspace.save_settings(self.settings)
         self.refresh_panels()
         await self.add_message("system", "模型连接设置已保存。Key 仅保存在本次进程内存；连接状态表示配置就绪，首个请求会验证实际可用性。")
+
+    async def picked_theme(self, value: str | None) -> None:
+        if value:
+            await self.change_theme(value)
+
+    async def change_theme(self, value: str) -> None:
+        if value not in THEMES:
+            raise ValueError("主题不存在。使用 /theme 查看可选配色。")
+        self.settings.theme = value
+        self.workspace.save_settings(self.settings)
+        self.refresh_css(animate=False)
+        self.refresh_panels()
+        await self.add_message("system", f"已切换主题：{THEMES[value].name}。设置已保存。")
+
+    async def picked_logo(self, value: str | None) -> None:
+        if value:
+            await self.change_logo(value)
+
+    async def change_logo(self, value: str) -> None:
+        aliases = {"3d-ascii": "3d", "pixel-glitch": "glitch", "block-forge": "block"}
+        value = aliases.get(value, value)
+        if value not in LOGOS:
+            raise ValueError("字标样式不存在。使用 /logo 查看可选样式。")
+        self.settings.logo = value
+        self.workspace.save_settings(self.settings)
+        self.refresh_panels()
+        await self.add_message("system", f"已切换字标：{LOGOS[value].split(' · ')[0]}。设置已保存。")
 
     async def picked_project(self, value: str | None) -> None:
         if value is not None:
