@@ -318,6 +318,8 @@ def write_model_artifacts(project: Path, payload: dict[str, Any]) -> None:
         raise ValueError("模型返回结果必须同时包含 rtl/ 与 tb/ 文件。")
     joined_rtl = "\n".join(normalized_files[p] for p in rtl_files)
     uncommented_rtl = re.sub(r"/\*.*?\*/|//[^\r\n]*", " ", joined_rtl, flags=re.S)
+    if re.search(r'\$(?:display|write|monitor|strobe|finish|stop|system)\b', uncommented_rtl):
+        raise ValueError('RTL must not print verification success or control the simulator; checks belong in tb/.')
     top_declarations = re.findall(rf"\bmodule\s+{re.escape(top)}\b", uncommented_rtl)
     if len(top_declarations) != 1:
         raise ValueError(f"RTL 文件中没有顶层模块 {top}。")
@@ -354,12 +356,20 @@ def write_model_artifacts(project: Path, payload: dict[str, Any]) -> None:
     manifest["top_ports"] = ports
     manifest["unmapped_top_ports"] = unmapped
     manifest["td_full_allowed"] = not unmapped
-    manifest["checks"] = payload.get("checks", []) if isinstance(payload.get("checks", []), list) else []
+    checks = payload.get('checks')
+    if not isinstance(checks,list) or not 1 <= len(checks) <= 128 or any(not isinstance(item,str) or not item.strip() or len(item)>2000 for item in checks):
+        raise ValueError('checks must contain 1..128 nonempty verification requirements.')
+    manifest["checks"] = checks
     generation=payload.get('_generation',{})
     manifest['model_backend']={key:generation[key] for key in ('provider','model') if isinstance(generation,dict) and isinstance(generation.get(key),str)}
     manifest["generated_by"] = 'model-response' if not manifest['model_backend'] else f"{manifest['model_backend'].get('model','unknown')} via {manifest['model_backend'].get('provider','unknown')}"
     writes = dict(normalized_files)
     writes["spec/design.md"] = design_doc.rstrip() + "\n"
+    writes['spec/verification-plan.json'] = json.dumps({
+        'schema_version':1, 'origin':'model-generated-unreviewed',
+        'requirements':[{'id':f'REQ-{index:03d}','description':description,'method':'simulation-check'}
+                        for index,description in enumerate(checks,1)]
+    },ensure_ascii=False,indent=2)+'\n'
     writes["constraints/generated.adc"] = adc_text
     writes["project.json"] = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
     _atomic_write(project, writes)

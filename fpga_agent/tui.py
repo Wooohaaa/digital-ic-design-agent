@@ -54,6 +54,7 @@ HELP = """### 在终端完成设计闭环
 | `/design --full 需求` | 生成、仿真、TD 实现、交付 |
 | `/cpu name multi --full` | 新建 RV32I CPU；架构 single / multi / pipeline |
 | `/verify` · `/synth` · `/td` | 仿真、综合、完整实现 |
+| `/lint` · `/review` | 严格 RTL lint、工程审查与阻塞项 |
 | `/flow` · `/package` | 完整流程、交付；支持 --simulation-only |
 | `/suite --full` · `/replay --full` | CPU 基准、重放保存的 Luna 响应 |
 | `/status` · `/artifacts` · `/open path` | 当前证据、产物、文件预览 |
@@ -551,7 +552,7 @@ class ForgeApp(App):
                     arguments["architecture"] = tokens[1] if len(tokens) > 1 and not tokens[1].startswith("--") else "multi"
             elif action == "design":
                 arguments["brief"] = rest.removeprefix("--full ")
-            elif action == "package":
+            elif action in ("package", "review"):
                 arguments["simulation_only"] = "--simulation-only" in tokens
             plan = make_plan(self.workspace, self.settings, action, arguments, self.selected)
             await self.offer_plan(plan)
@@ -714,8 +715,14 @@ class ForgeApp(App):
                     break
             cancelled = runner.cancelled
             label = "已取消" if cancelled else "通过" if code == 0 else f"失败 · exit {code}"
+            is_review = any(len(command)>4 and command[3]=='fpga_agent' and command[4]=='review' for command in plan.commands)
+            if is_review and code == 2 and not cancelled:
+                label = '存在待关闭项'
             body = f"**{plan.title} · {label}**\n\n"
-            if code and not cancelled:
+            review_path = plan.project / 'reports/engineering-review.md' if is_review and plan.project else None
+            if review_path and review_path.is_file() and code in (0,2) and not cancelled:
+                body += review_path.read_text(encoding='utf-8')[:22000]
+            elif code and not cancelled:
                 body += "```text\n" + "\n".join(self.tail[-12:])[:6000] + "\n```\n"
             else:
                 body += f"耗时 {time.monotonic()-self.started:.1f}s。详细输出见日志面板。"

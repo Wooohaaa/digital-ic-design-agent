@@ -23,7 +23,7 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
     async def wait_idle(self, app, pilot):
         for _ in range(300):
             await pilot.pause(0.04)
-            if not app.busy:
+            if not app.busy and not app.queued_input and not app.processing_queue:
                 return
         self.fail("UI task did not finish")
 
@@ -48,9 +48,36 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("escape", "shift+tab")
             self.assertEqual(app.settings.mode, "plan")
             await pilot.resize_terminal(78, 28)
-            self.assertFalse(app.query_one("#inspector").display)
-            self.assertFalse(app.query_one("#sidebar").display)
+            self.assertEqual(len(app.query('#inspector')),0)
+            self.assertEqual(len(app.query('#sidebar')),0)
             self.assertGreater(app.query_one(Prompt).size.width, 25)
+
+    async def test_busy_prompts_execute_fifo_without_duplicate_history(self):
+        import sys
+        app = ForgeApp(self.root)
+        async with app.run_test(size=(100,36)) as pilot:
+            app.start_plan(TaskPlan('queued-input integration',[[sys.executable,'-c','import time; time.sleep(1.5)']]))
+            for name in ('first','second'):
+                app.query_one(Prompt).load_text('/init '+name)
+                await pilot.press('enter')
+            self.assertTrue(app.queued_input)
+            await self.wait_idle(app,pilot)
+            for name in ('first','second'):
+                self.assertTrue((self.root/name/'project.json').is_file())
+                self.assertEqual(sum(m['content']=='/init '+name for m in app.session.messages),1)
+            self.assertEqual(app.selected.name,'second')
+            self.assertFalse(any(m.get('queue_id') for m in app.session.messages))
+
+    async def test_review_tool_renders_gate_findings_when_artifacts_are_blocked(self):
+        project=create_project('review',self.root/'review')
+        app=ForgeApp(self.root)
+        async with app.run_test(size=(120,42)) as pilot:
+            await app.select_project(project)
+            await app.submit_command('/review --simulation-only')
+            await self.wait_idle(app,pilot)
+            message=next(m['content'] for m in app.session.messages if m['role']=='tool')
+            self.assertIn('DV-001',message)
+            self.assertIn('存在待关闭项',message)
 
     async def test_connection_key_is_not_written_and_resume_restores_conversation(self):
         app = ForgeApp(self.root)

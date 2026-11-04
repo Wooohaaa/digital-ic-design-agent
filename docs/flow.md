@@ -11,7 +11,7 @@
                                ▼
                     Icarus compile + 自检仿真
                          │ pass       │ fail
-                         ▼            └─► 诊断回灌，最多 5 轮修复
+                         ▼            └─► 诊断回灌，冻结验证器，最多 5 轮 RTL 修复
                   Anlogic TD Tcl 工程
                          │
                    综合 / 布局布线
@@ -40,6 +40,8 @@ fpga-agent package <工程目录>
 ```
 
 `design` 与 `verify` 都会落仿真报告。`td` 没有仿真通过的报告时会拒绝启动。模型生成的文本一律不作为 Tcl 或 shell 执行。
+
+最新的配置/依赖指纹、逐项需求检查、严格 lint、分职责工程审查和交付校验见 [engineering-workflow.md](engineering-workflow.md)。普通模块自动修复现在冻结已接受的 testbench/验收目标。现有工程仍可运行自检仿真，但缺少需求追踪或独立验证的部分会在审查报告中保留为阻塞项。
 
 ## 后续可扩展的验证强度
 

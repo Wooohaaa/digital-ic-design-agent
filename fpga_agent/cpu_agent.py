@@ -72,6 +72,7 @@ def design_cpu(project: Path, architecture: str, *, provider='exchange',model='g
             destination=project/'rtl/rv32_core.v';temp=destination.with_suffix('.v.candidate')
             temp.write_text(rtl.rstrip()+'\n',encoding='utf-8');os.replace(temp,destination)
             (project/'spec/design.md').write_text(spec,encoding='utf-8')
+            (project/'spec/brief.md').write_text(CPU_CONTRACT+'\nArchitecture: '+architecture+'\n',encoding='utf-8')
             prepare_project(project)
             manifest=json.loads((project/'project.json').read_text(encoding='utf-8'))
             manifest['verification']['seeds']=seeds;manifest['model_backend']={'model':model,'transport':provider,'architecture':architecture}

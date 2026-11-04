@@ -11,8 +11,9 @@ for name in ('README.md','pyproject.toml','.gitignore'):
 for directory in ('fpga_agent','tests','docs','scripts'):
     for path in (ROOT/directory).rglob('*'):
         if path.is_file() and '__pycache__' not in path.parts and path.suffix in {'.py','.md','.json','.v','.sv','.adc','.sdc','.tcss','.png'}:files.add(path)
-for name in ('rv32_single','rv32_multi','rv32_pipeline'):
-    project=ROOT/'benchmarks'/name
+projects=[ROOT/'benchmarks'/name for name in ('rv32_single','rv32_multi','rv32_pipeline')]
+projects.append(ROOT/'hx1p35a-heartbeat')
+for project in projects:
     files.add(project/'project.json')
     for directory in ('rtl','tb','constraints','board','spec','generation','deliverables'):
         for path in (project/directory).rglob('*'):
@@ -22,12 +23,12 @@ for rel in ('rtl/rv32_core.v','project.json','build/cpu/alu_edges/program.hex','
     if (failure/rel).is_file():files.add(failure/rel)
 files.add(ROOT/'benchmarks/suite-report.json')
 for path in (ROOT/'reports').glob('*'):
-    if path.is_file() and path.name in {'agent-regression.json','wheel-smoke.json'}:files.add(path)
+    if path.is_file() and path.name in {'engineering-validation.json','engineering-tests.json','wheel-smoke.json'}:files.add(path)
 for wheel in (ROOT/'dist').glob(f'*{__version__}*.whl'):files.add(wheel)
 manifest={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(files)}
 archive=out/f'digital-ic-agent-v{__version__}.zip'
 with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:
-    for path in sorted(files):z.write(path,path.relative_to(ROOT))
+    for path in sorted(files):z.write(path,path.relative_to(ROOT).as_posix())
     z.writestr('release-manifest.json',json.dumps(manifest,indent=2)+'\n')
 with zipfile.ZipFile(archive) as z:
     assert z.testzip() is None

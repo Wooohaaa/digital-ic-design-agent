@@ -33,6 +33,27 @@ class VerifyProjectTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
+    def mocked_run(self, compiler_output='', runtime_output='PASS\n'):
+        with patch('fpga_agent.verify.shutil.which',side_effect=['iverilog','vvp']), patch(
+            'fpga_agent.verify.subprocess.run',side_effect=[
+                SimpleNamespace(returncode=0,stdout=compiler_output,stderr=''),
+                SimpleNamespace(returncode=0,stdout=runtime_output,stderr='')]):
+            return verify_project(self.project)
+
+    def test_compiler_pass_text_cannot_replace_runtime_result(self):
+        self.assertEqual(self.mocked_run('PASS\n','finished without checking anything\n').status,'fail')
+
+    def test_assertion_error_with_zero_exit_is_rejected(self):
+        self.assertEqual(self.mocked_run(runtime_output='ERROR: assertion failed\nPASS\n').status,'fail')
+
+    def test_planned_requirement_must_execute_exactly_once(self):
+        (self.project/'spec').mkdir()
+        (self.project/'spec/verification-plan.json').write_text(json.dumps({'requirements':[{'id':'REQ-001'}]}))
+        for output in ('PASS\n','CHECK REQ-001 PASS\nCHECK REQ-001 PASS\nPASS\n','CHECK REQ-002 PASS\nPASS\n'):
+            with self.subTest(output=output):
+                self.assertEqual(self.mocked_run(runtime_output=output).status,'fail')
+        self.assertEqual(self.mocked_run(runtime_output='CHECK REQ-001 PASS\nPASS\n').status,'pass')
+
     def test_timeout_with_bytes_is_normalized_and_reported(self) -> None:
         with patch("fpga_agent.verify.shutil.which", side_effect=["iverilog", "vvp"]), patch(
             "fpga_agent.verify.subprocess.run",

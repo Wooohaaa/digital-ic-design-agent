@@ -37,6 +37,20 @@ def make_cpu_project(path: Path) -> Path:
 
 
 class GenerationRepairTests(unittest.TestCase):
+    def test_repair_cannot_weaken_accepted_verification_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project=create_project('FrozenVerifier',Path(directory)/'frozen')
+            initial=valid_generic_payload()
+            weakened=valid_generic_payload()
+            weakened['checks']=['print PASS unconditionally']
+            failed=SimpleNamespace(status='fail',output='counterexample',elapsed_seconds=.01)
+            with patch.object(cli,'generate_payload',side_effect=[initial,weakened]), patch.object(cli,'verify_project',return_value=failed) as verify:
+                self.assertEqual(cli.do_design(project,'reset must be checked',1,provider='api'),1)
+            self.assertEqual(verify.call_count,1)
+            self.assertIn('frozen',(project/'generation/round_01/validation-error.txt').read_text())
+            self.assertEqual((project/'spec/brief.md').read_text().strip(),'reset must be checked')
+            self.assertEqual((project/'tb/tb_demo.v').read_text().strip(),initial['files']['tb/tb_demo.v'])
+
     def test_generic_api_validation_failure_retries_with_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = create_project("GenericRetry", Path(directory) / "generic")

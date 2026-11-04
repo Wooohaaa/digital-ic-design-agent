@@ -21,6 +21,7 @@ COMMANDS = {
     "/project": "切换工程", "/init": "创建工程：/init name",
     "/design": "生成 RTL：/design 需求描述", "/cpu": "生成 CPU：/cpu name multi --full",
     "/verify": "独立仿真验证", "/synth": "TD 逻辑综合", "/td": "TD 综合与布局布线",
+    "/lint": "严格 RTL lint", "/review": "工程团队审查与未完成事项",
     "/flow": "仿真 → TD → 交付", "/package": "生成交付包", "/suite": "三个 CPU 回归",
     "/replay": "重放当前 CPU 的 Luna 响应", "/status": "查看证据与工具状态",
     "/artifacts": "浏览交付与报告", "/files": "搜索与预览工程文件", "/open": "预览文件：/open rtl/core.v",
@@ -151,6 +152,11 @@ class Workspace:
             result["project"] = project.relative_to(self.root).as_posix()
             result["manifest"] = read_json(project / "project.json", {})
             result["evidence"] = evidence(project)
+            from .quality import review_project
+            try:
+                result['engineering_review'] = review_project(project,write=False)
+            except (OSError,ValueError,KeyError,TypeError) as exc:
+                result['engineering_review'] = {'status':'blocked','reason':str(exc)}
             sources = {}
             manifest = result["manifest"]
             names = list(manifest.get("rtl_sources", [])) + ["spec/brief.md", "spec/design.md"]
@@ -228,7 +234,7 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
     if action == "suite":
         commands = [cli + ["cpu-suite", "--root", str(workspace.root / "benchmarks")] + (["--full"] if full else [])]
         return TaskPlan("RISC-V benchmark suite", commands)
-    if action not in {"init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "replay"}:
+    if action not in {"init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "replay", "lint", "review"}:
         raise ValueError(f"不支持的工具：{action}")
     if not project:
         raise ValueError("先使用 /project 选择工程，或 /init name 创建工程。")
@@ -273,6 +279,8 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
             commands = [cli + [action, str(project)]]
             if action == "package" and arguments.get("simulation_only") is True:
                 commands[0].append("--simulation-only")
+            if action == 'review' and arguments.get('simulation_only') is True:
+                commands[0] += ['--scope','simulation']
     return TaskPlan(action + " · " + project.name, commands, project)
 
 

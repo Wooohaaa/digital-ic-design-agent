@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 from fpga_agent.cpu_bench import trusted_hashes
-from fpga_agent.evidence import implementation_valid, input_hashes, simulation_valid, source_hashes, sha
+from fpga_agent.evidence import EVIDENCE_VERSION, implementation_valid, input_hashes, simulation_input_hashes, simulation_valid, source_hashes, sha
+from fpga_agent.riscv import corpus, run_reference
 
 
 class EvidenceGateTests(unittest.TestCase):
@@ -24,6 +25,7 @@ class EvidenceGateTests(unittest.TestCase):
         }.items():
             (self.project / path).write_text(content, encoding="utf-8")
         self.manifest = {
+            'project':'demo',
             "rtl_sources": ["rtl/core.v"],
             "testbench_sources": ["tb/tb.v"],
             "board_constraints": "constraints/pins.adc",
@@ -43,17 +45,71 @@ class EvidenceGateTests(unittest.TestCase):
             "trusted_harness_hashes": trusted_hashes(self.project),
             "board_soc": "pass",
             "seeds": 4,
+            'evidence_version':EVIDENCE_VERSION,
+            'verification_inputs':simulation_input_hashes(self.project,self.manifest),
+            'returncode':0,
+            'case_count':len(corpus(4)),
+            'cases':[{'name':case.name,'status':'pass'} for case in corpus(4)],
+            'instruction_coverage':sorted(set().union(*(run_reference(case).coverage for case in corpus(0)))),
         }
         self.implementation = {
             "status": "pass",
             "stage": "full",
             "input_hashes": input_hashes(self.project, self.manifest),
-            "timing_summary": {"setup_wns_ns": 0.1, "hold_wns_ns": 0.05},
+            "timing_summary": {"setup_wns_ns": 0.1, "hold_wns_ns": 0.05, 'setup_tns_ns':0,'hold_tns_ns':0},
             "bitstream_hashes": {"reports/demo.bit": sha(self.project / "reports/demo.bit")},
+            'bitstreams':['reports/demo.bit'],
+            'run_directory':'td/runs/run_snapshot',
         }
+        run=self.project/self.implementation['run_directory']
+        for name in self.manifest['rtl_sources']+[self.manifest['board_constraints'],self.manifest['timing_constraints']]:
+            snapshot=run/'sources'/name
+            snapshot.parent.mkdir(parents=True,exist_ok=True)
+            snapshot.write_bytes((self.project/name).read_bytes())
+        timing=run/'demo_full_Runs/phy_1/final_timing.rpt'
+        timing.parent.mkdir(parents=True)
+        timing.write_text('SWNS: 0.1ns STNS: 0ns HWNS: 0.05ns HTNS: 0ns')
 
     def tearDown(self) -> None:
         self.temp.cleanup()
+
+    def test_changed_testbench_top_invalidates_old_pass(self):
+        self.manifest['testbench_top']='another_tb'
+        valid,reason=simulation_valid(self.project,self.manifest,self.simulation)
+        self.assertFalse(valid)
+        self.assertIn('configuration',reason)
+
+    def test_rtl_compilation_order_is_part_of_implementation_evidence(self):
+        (self.project/'rtl/other.v').write_text('module other; endmodule')
+        self.manifest['rtl_sources'].append('rtl/other.v')
+        before=input_hashes(self.project,self.manifest)
+        self.manifest['rtl_sources'].reverse()
+        self.assertNotEqual(before,input_hashes(self.project,self.manifest))
+
+    def test_incomplete_or_failed_cpu_case_cannot_claim_pass(self):
+        for broken in (
+            dict(self.simulation,cases=self.simulation['cases'][:-1]),
+            dict(self.simulation,case_count=0),
+            dict(self.simulation,instruction_coverage=[]),
+            dict(self.simulation,returncode=1),
+        ):
+            with self.subTest(report=broken):
+                self.assertFalse(simulation_valid(self.project,self.manifest,broken)[0])
+
+    def test_include_and_memory_image_changes_invalidate_evidence(self):
+        (self.project/'rtl/defs.vh').write_text('`define W 8\n')
+        (self.project/'image.hex').write_text('00112233\n')
+        (self.project/'rtl/core.v').write_text('`include "defs.vh"\nmodule core; reg [31:0] rom[0:0]; initial $readmemh("image.hex",rom); endmodule\n')
+        original=simulation_input_hashes(self.project,self.manifest)
+        self.assertIn('rtl/defs.vh',original)
+        self.assertIn('image.hex',original)
+        (self.project/'image.hex').write_text('aabbccdd\n')
+        self.assertNotEqual(original,simulation_input_hashes(self.project,self.manifest))
+
+    def test_missing_or_negative_tns_blocks_implementation(self):
+        for value in (None,-0.01,float('nan')):
+            report=dict(self.implementation,timing_summary=dict(self.implementation['timing_summary'],setup_tns_ns=value))
+            self.assertFalse(implementation_valid(self.project,self.manifest,report)[0])
 
     def test_rejects_constraints_changed_after_full_implementation(self) -> None:
         self.assertEqual(implementation_valid(self.project, self.manifest, self.implementation), (True, "pass"))

@@ -9,6 +9,16 @@ from datetime import datetime
 from pathlib import Path
 
 from .project import load_manifest
+from .evidence import hdl_input_hashes
+
+
+def parse_timing_summary(text: str) -> dict:
+    number = r'([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[+-]?(?:nan|inf(?:inity)?))'
+    result = {}
+    for marker, key in (('SWNS','setup_wns_ns'),('STNS','setup_tns_ns'),('HWNS','hold_wns_ns'),('HTNS','hold_tns_ns')):
+        match = re.search(rf'\b{marker}:\s*{number}\s*ns', text, re.IGNORECASE)
+        result[key] = float(match.group(1)) if match else None
+    return result
 
 
 DEFAULT_TD_ROOT = Path(r"C:\Anlogic\TD_6.2.1_Engineer_6.2.168.116")
@@ -67,7 +77,8 @@ def build_tcl(project: Path, stage: str) -> tuple[Path, Path]:
     run_dir = project / "td" / "runs" / f"run_{stamp}"
     run_dir.mkdir(parents=True, exist_ok=False)
     copied_inputs: list[tuple[str, Path]] = []
-    input_names = list(manifest["rtl_sources"]) + [manifest["board_constraints"], manifest["timing_constraints"]]
+    dependencies = hdl_input_hashes(project,manifest['rtl_sources'])
+    input_names = list(dict.fromkeys(manifest['rtl_sources'] + list(dependencies))) + [manifest["board_constraints"], manifest["timing_constraints"]]
     for name in input_names:
         normalized_name = name.replace("\\", "/") if isinstance(name, str) else ""
         if not normalized_name or any(
@@ -148,7 +159,7 @@ def run_td(
     if stage == "full":
         required.append("Run phy_1 success")
     missing = [marker for marker in required if marker not in output]
-    bitstreams = list(runs.glob("phy_1/*.bit")) if stage == "full" else []
+    bitstreams = [path for path in runs.glob('phy_1/*.bit') if path.is_file() and path.stat().st_size > 0] if stage == 'full' else []
     if proc.returncode == 0 and (missing or (stage == "full" and not bitstreams)):
         output += f"\nTD 返回码为 0，但未找到完整的预期成功标记：{missing}\n"
         if stage == "full" and not bitstreams:
@@ -157,17 +168,14 @@ def run_td(
     if proc.returncode == 0 and stage == "full":
         timing_report = runs / "phy_1" / "final_timing.rpt"
         report_text = timing_report.read_text(encoding="utf-8", errors="replace") if timing_report.is_file() else ""
-        number = r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[+-]?(?:nan|inf(?:inity)?))"
-        setup = re.search(rf"\bSWNS:\s*{number}ns", report_text, re.IGNORECASE)
-        hold = re.search(rf"\bHWNS:\s*{number}ns", report_text, re.IGNORECASE)
-        if not setup or not hold:
+        timing = parse_timing_summary(report_text)
+        if any(value is None for value in timing.values()):
             output += "\nTD 没有生成可解析的最终 setup/hold 时序报告，full gate 未通过。\n"
             return 1, output, command, run_dir
-        setup_ns, hold_ns = float(setup.group(1)), float(hold.group(1))
-        if not math.isfinite(setup_ns) or not math.isfinite(hold_ns):
-            output += f"\n时序报告包含非有限 setup/hold WNS：{setup.group(1)}ns / {hold.group(1)}ns。\n"
+        if not all(math.isfinite(value) for value in timing.values()):
+            output += f"\n时序报告包含非有限 WNS/TNS：{timing}。\n"
             return 1, output, command, run_dir
-        if setup_ns < 0 or hold_ns < 0:
-            output += f"\n时序未收敛：setup WNS={setup.group(1)}ns, hold WNS={hold.group(1)}ns。\n"
+        if timing['setup_wns_ns'] < 0 or timing['hold_wns_ns'] < 0 or timing['setup_tns_ns'] != 0 or timing['hold_tns_ns'] != 0:
+            output += f"\n时序未收敛：{timing}。\n"
             return 1, output, command, run_dir
     return proc.returncode, output, command, run_dir

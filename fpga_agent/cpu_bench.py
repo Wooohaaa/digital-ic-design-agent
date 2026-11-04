@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from .project import load_manifest, save_manifest, template_dir
 from .riscv import Program, corpus, run_reference, EBREAK
+from .evidence import EVIDENCE_VERSION, simulation_input_hashes
 
 
 TB_CPU = r'''`timescale 1ns/1ps
@@ -237,15 +238,20 @@ def run_benchmark(project: Path,seeds: int|None=None) -> dict:
     for name,expected_hash in manifest.get('trusted_testbench_hashes',{}).items():
         if digest(project/name)!=expected_hash:raise ValueError(f'Trusted testbench changed: {name}')
     start_sources=verification_hashes(project,manifest);start_harness=trusted_hashes(project)
+    start_inputs=simulation_input_hashes(project,manifest)
+    started_at=datetime.now(timezone.utc).isoformat()
     compiler,runtime,env=tool_environment()
     seeds=manifest.get('verification',{}).get('seeds',64) if seeds is None else seeds
-    if not isinstance(seeds,int) or not 0<=seeds<=1024:raise ValueError('seeds must be 0..1024')
+    if isinstance(seeds,bool) or not isinstance(seeds,int) or not 0<=seeds<=1024:raise ValueError('seeds must be 0..1024')
     build=project/'build/cpu';build.mkdir(parents=True,exist_ok=True)
     reports=project/'reports';reports.mkdir(exist_ok=True)
     binary=build/'cpu.vvp'
     cmd=[compiler,'-g2012','-Wall','-s','tb_cpu','-o',str(binary)]+[str(project/p) for p in manifest['rtl_sources']]+[str(project/'tb/tb_cpu.v')]
     start=time.monotonic();cases=[];coverage=set();log=[]
-    compiled=subprocess.run(cmd,cwd=project,env=env,capture_output=True,text=True,timeout=120)
+    try:
+        compiled=subprocess.run(cmd,cwd=project,env=env,capture_output=True,text=True,timeout=120)
+    except (subprocess.TimeoutExpired,OSError) as exc:
+        compiled=subprocess.CompletedProcess(cmd,124,stdout='',stderr=str(exc))
     log.append(compiled.stdout+compiled.stderr)
     if compiled.returncode==0:
         for program in corpus(seeds):
@@ -270,17 +276,26 @@ def run_benchmark(project: Path,seeds: int|None=None) -> dict:
     soc_status='not_run'
     if compiled.returncode==0 and cases and all(c['status']=='pass' for c in cases):
         socbin=build/'soc.vvp'
-        soc_compile=subprocess.run([compiler,'-g2012','-s','tb_soc','-o',str(socbin)]+[str(project/p) for p in manifest['rtl_sources']]+[str(project/'tb/tb_soc.v')],env=env,cwd=project,capture_output=True,text=True,timeout=120)
-        soc_run=subprocess.run([runtime,str(socbin)],env=env,cwd=project,capture_output=True,text=True,timeout=20) if soc_compile.returncode==0 else soc_compile
-        soc_output=soc_compile.stdout+soc_compile.stderr+soc_run.stdout+soc_run.stderr
+        try:
+            soc_compile=subprocess.run([compiler,'-g2012','-s','tb_soc','-o',str(socbin)]+[str(project/p) for p in manifest['rtl_sources']]+[str(project/'tb/tb_soc.v')],env=env,cwd=project,capture_output=True,text=True,timeout=120)
+            soc_run=subprocess.run([runtime,str(socbin)],env=env,cwd=project,capture_output=True,text=True,timeout=20) if soc_compile.returncode==0 else soc_compile
+            soc_output=soc_compile.stdout+soc_compile.stderr+soc_run.stdout+soc_run.stderr
+        except (subprocess.TimeoutExpired,OSError) as exc:
+            soc_run=subprocess.CompletedProcess([],124)
+            soc_output=str(exc)
         (build/'soc.log').write_text(soc_output,encoding='utf-8')
         soc_status='pass' if soc_run.returncode==0 and 'PASS: board ROM/RAM signature' in soc_output else 'fail'
         log.append(soc_output)
     passed=compiled.returncode==0 and len(cases)==len(corpus(seeds)) and all(c['status']=='pass' for c in cases) and soc_status=='pass'
-    if verification_hashes(project,load_manifest(project))!=start_sources or trusted_hashes(project)!=start_harness:
+    try:
+        changed=verification_hashes(project,load_manifest(project))!=start_sources or trusted_hashes(project)!=start_harness or simulation_input_hashes(project,load_manifest(project))!=start_inputs
+    except (OSError,ValueError,KeyError):
+        changed=True
+    if changed:
         passed=False;log.append('Verification inputs changed while simulation was running.')
     report={'status':'pass' if passed else 'fail','verification_kind':'riscv-retire','simulator':'Icarus Verilog',
-        'started_at':datetime.now(timezone.utc).isoformat(),'elapsed_seconds':round(time.monotonic()-start,3),
+        'started_at':started_at,'elapsed_seconds':round(time.monotonic()-start,3),
+        'evidence_version':EVIDENCE_VERSION,'verification_inputs':start_inputs,'returncode':0 if passed else 1,
         'source_hashes':start_sources,'trusted_harness_hashes':start_harness,
         'seeds':seeds,'case_count':len(cases),'cases':cases,'instruction_coverage':sorted(coverage),'board_soc':soc_status,
         'output':'\n'.join(log),'command':cmd}

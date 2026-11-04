@@ -36,5 +36,6 @@
     "model": "gpt-6-luna",
     "transport": "exchange",
     "architecture": "pipeline"
-  }
+  },
+  "td_status": "full"
 }

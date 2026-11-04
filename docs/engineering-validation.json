@@ -1,0 +1,70 @@
+[
+  {
+    "project": "hx1p35a-heartbeat",
+    "simulation": "pass",
+    "cases": null,
+    "seeds": null,
+    "implementation": "pass",
+    "timing": {
+      "setup_wns_ns": 16.332,
+      "setup_tns_ns": 0.0,
+      "hold_wns_ns": 0.154,
+      "hold_tns_ns": 0.0
+    },
+    "sta_coverage_percent": 88.51,
+    "lint": "blocked",
+    "relocated_archive_evidence": "pass",
+    "archive_sha256": "aff1f28197901248369bca17fd77009aa073d276335c05be9adda405fe1b9953"
+  },
+  {
+    "project": "rv32_multi",
+    "simulation": "pass",
+    "cases": 114,
+    "seeds": 64,
+    "implementation": "pass",
+    "timing": {
+      "setup_wns_ns": 7.284,
+      "setup_tns_ns": 0.0,
+      "hold_wns_ns": 0.034,
+      "hold_tns_ns": 0.0
+    },
+    "sta_coverage_percent": 92.24,
+    "lint": "blocked",
+    "relocated_archive_evidence": "pass",
+    "archive_sha256": "377a7fd2abbe67acf7d39375b33a8c0d164e2ce0442d4ebb37ab143d505be05f"
+  },
+  {
+    "project": "rv32_pipeline",
+    "simulation": "pass",
+    "cases": 114,
+    "seeds": 64,
+    "implementation": "pass",
+    "timing": {
+      "setup_wns_ns": 0.696,
+      "setup_tns_ns": 0.0,
+      "hold_wns_ns": 0.039,
+      "hold_tns_ns": 0.0
+    },
+    "sta_coverage_percent": 92.85,
+    "lint": "blocked",
+    "relocated_archive_evidence": "pass",
+    "archive_sha256": "19e720837a616f1966a8f2e65b7971ffff3ac17e617e6f769fc38c6fd8b50482"
+  },
+  {
+    "project": "rv32_single",
+    "simulation": "pass",
+    "cases": 114,
+    "seeds": 64,
+    "implementation": "pass",
+    "timing": {
+      "setup_wns_ns": 0.463,
+      "setup_tns_ns": 0.0,
+      "hold_wns_ns": 0.073,
+      "hold_tns_ns": 0.0
+    },
+    "sta_coverage_percent": 92.36,
+    "lint": "blocked",
+    "relocated_archive_evidence": "pass",
+    "archive_sha256": "3b02fd9916ca3cd032689f67c74c58c9033bc60c319e7a9de675b26d3e2c5c7d"
+  }
+]

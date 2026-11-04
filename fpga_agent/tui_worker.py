@@ -11,7 +11,7 @@ from .terminal import redact, write_json
 SCHEMA = {
     "type": "object", "properties": {
         "message": {"type": "string"},
-        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "suite"]},
+        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "verify", "synth", "td", "flow", "package", "suite", "lint", "review"]},
         "arguments": {"type": "object", "properties": {
             "project": {"type": "string"}, "brief": {"type": "string"},
             "architecture": {"type": "string", "enum": ["single", "multi", "pipeline"]},
@@ -27,6 +27,11 @@ Tools: init creates a template; design generates generic Verilog/testbench with 
 cpu-design generates a new RV32I CPU and independent verification; verify runs existing tests;
 synth runs TD synthesis; td runs synthesis and route; flow verifies, implements and packages existing RTL;
 package packages verified results; suite tests existing three CPU benchmarks. none is conversational.
+lint runs strict Verilator lint; review produces evidence-driven discipline reviews and next actions.
+Use the engineering_review context to identify the first blocked gate and select the appropriate next tool.
+Never equate a self-check PASS with independent verification, coverage closure, hardware validation or signoff.
+Keep requirement/testbench contracts frozen during automatic RTL repairs. If the verifier is wrong, report
+the issue for explicit revision rather than silently weakening checks. Missing tools are blocked, not passed.
 For a new generic design include the user's full requirements in brief; choose a project folder name
 when none is selected. full=true on design/cpu-design requests implementation and delivery too.
 Paths are workspace-relative. Do not execute shell commands, invent results, or claim tools have run.

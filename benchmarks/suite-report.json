@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-11-04T12:14:17.255124+08:00",
+  "created_at": "2026-11-04T16:02:30.443064+08:00",
   "target": "PH1P35MDG324 / HX1P35A",
   "clock_mhz": 50,
   "results": [
@@ -122,15 +122,18 @@
         }
       },
       "bitstreams": {
-        "td/runs/run_20261104_120729_020902/rv32_single_full_Runs/phy_1/rv32_single_full.bit": "480e4f88ccbf64c9039fbe28bc5823f30e2e845574e2ad9c35daac3120d5fc75"
+        "td/runs/run_20261104_155649_057515/rv32_single_full_Runs/phy_1/rv32_single_full.bit": "83ea9b12cdbf205f59801e1556e38d73ba7514530e630e82f1a7ce7a32fe51f7"
       },
       "delivery": "benchmarks/rv32_single/deliverables/rv32_single-delivery.zip",
-      "delivery_sha256": "3d6df99d0ed4fe385bbbe7670cfc5f9ca4c34f3d7c0d89d85f1c6e5029facdf3",
+      "delivery_sha256": "3b02fd9916ca3cd032689f67c74c58c9033bc60c319e7a9de675b26d3e2c5c7d",
       "archive_valid": true,
       "reference_hashes": {
-        "cpu_bench.py": "8bed5e5456d1c2a5392d07a94220981a8848eaeda8f83c97d4d3952b44028d58",
+        "cpu_bench.py": "a45335a8c8146439d92b57d7a9329391f0b1dde63d74896bd838b82871bbcbaf",
         "riscv.py": "d38f6c11890cf9d61749282fea28c2611da2fae69fb341c980658b413640e696"
-      }
+      },
+      "sta_coverage_percent": 92.36,
+      "engineering_signoff": "not_granted",
+      "required_open_items": 5
     },
     {
       "project": "rv32_multi",
@@ -251,15 +254,18 @@
         }
       },
       "bitstreams": {
-        "td/runs/run_20261104_120133_629770/rv32_multi_full_Runs/phy_1/rv32_multi_full.bit": "fd4e59efcb9185f4f953ccec76c6050bc2b40618975b3e32c2a3fca4f0f46d8e"
+        "td/runs/run_20261104_155224_026028/rv32_multi_full_Runs/phy_1/rv32_multi_full.bit": "60ddbfb236a863edd9b591ab390f92f79e4ea3af4445acc60d271cd8a8452f26"
       },
       "delivery": "benchmarks/rv32_multi/deliverables/rv32_multi-delivery.zip",
-      "delivery_sha256": "7aa26aecd6b24887dfa79b5b94070a80f3c272745d0821a5f81620da930c3ddb",
+      "delivery_sha256": "377a7fd2abbe67acf7d39375b33a8c0d164e2ce0442d4ebb37ab143d505be05f",
       "archive_valid": true,
       "reference_hashes": {
-        "cpu_bench.py": "8bed5e5456d1c2a5392d07a94220981a8848eaeda8f83c97d4d3952b44028d58",
+        "cpu_bench.py": "a45335a8c8146439d92b57d7a9329391f0b1dde63d74896bd838b82871bbcbaf",
         "riscv.py": "d38f6c11890cf9d61749282fea28c2611da2fae69fb341c980658b413640e696"
-      }
+      },
+      "sta_coverage_percent": 92.24,
+      "engineering_signoff": "not_granted",
+      "required_open_items": 5
     },
     {
       "project": "rv32_pipeline",
@@ -380,15 +386,18 @@
         }
       },
       "bitstreams": {
-        "td/runs/run_20261104_114206_706410/rv32_pipeline_full_Runs/phy_1/rv32_pipeline_full.bit": "0ac86788a5ca0af50afd4e436f1ce9c2698c26e3bb3e932c1376099549c136c8"
+        "td/runs/run_20261104_155421_507609/rv32_pipeline_full_Runs/phy_1/rv32_pipeline_full.bit": "422bc7690863bf5a3ff04d142d396f3150c4b44853cd31c45bec1bb96534e0a6"
       },
       "delivery": "benchmarks/rv32_pipeline/deliverables/rv32_pipeline-delivery.zip",
-      "delivery_sha256": "966526eb55b0b2f869094853c6a43db97cf6ece0c91c10f0000c95a1008a8fea",
+      "delivery_sha256": "19e720837a616f1966a8f2e65b7971ffff3ac17e617e6f769fc38c6fd8b50482",
       "archive_valid": true,
       "reference_hashes": {
-        "cpu_bench.py": "8bed5e5456d1c2a5392d07a94220981a8848eaeda8f83c97d4d3952b44028d58",
+        "cpu_bench.py": "a45335a8c8146439d92b57d7a9329391f0b1dde63d74896bd838b82871bbcbaf",
         "riscv.py": "d38f6c11890cf9d61749282fea28c2611da2fae69fb341c980658b413640e696"
-      }
+      },
+      "sta_coverage_percent": 92.85,
+      "engineering_signoff": "not_granted",
+      "required_open_items": 5
     }
   ]
 }

@@ -8,14 +8,16 @@ import platform
 import re
 import sys
 import zipfile
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .model import generate_payload,ModelOutputError
 from .project import create_project, load_manifest, resolve_project, save_manifest, write_model_artifacts
-from .td import run_td
+from .td import run_td, parse_timing_summary
 from .verify import verify_project
-from .evidence import input_hashes, simulation_valid, implementation_valid, sha
+from .evidence import input_hashes, simulation_valid, implementation_valid, sha, hdl_input_hashes, simulation_input_hashes
 
 
 def _read_brief(project: Path, brief: str | None, brief_file: str | None) -> str:
@@ -61,6 +63,9 @@ def do_design(project: Path, brief: str, repair_rounds: int, provider: str = 'ex
     manifest = load_manifest(project)
     if manifest.get('verification',{}).get('kind')=='riscv-retire':
         raise ValueError('CPU projects use cpu-design with a protected independent verification harness.')
+    (project / 'spec').mkdir(exist_ok=True)
+    (project / 'spec/brief.md').write_text(brief.rstrip()+'\n',encoding='utf-8')
+    frozen_verification = None
     diagnostics = ""
     for attempt in range(repair_rounds + 1):
         try:
@@ -69,10 +74,18 @@ def do_design(project: Path, brief: str, repair_rounds: int, provider: str = 'ex
                 _board_profile(project),
                 current_rtl=_hdl_text(project, manifest, "rtl_sources", 60_000) if attempt else "",
                 current_tb=_hdl_text(project, manifest, "testbench_sources", 40_000) if attempt else "",
-                diagnostics=diagnostics,
+                diagnostics=diagnostics + ('\nFrozen verification contract (preserve exactly):\n'+json.dumps({key:value for key,value in frozen_verification.items() if key != 'files'},ensure_ascii=False) if frozen_verification is not None else ''),
                 provider=provider,model=model,workspace=project,audit_dir=project/'generation'/f'round_{attempt:02}',
             )
+            verifier = {key:payload.get(key) for key in ('top_module','testbench_top','board_io','checks')}
+            candidate_files = payload.get('files',{})
+            if not isinstance(candidate_files,dict) or any(not isinstance(name,str) or not isinstance(content,str) for name,content in candidate_files.items()):
+                raise ValueError('Model files must map paths to source strings.')
+            verifier['files'] = {name.replace('\\','/'):content.rstrip() for name,content in candidate_files.items() if name.replace('\\','/').startswith('tb/')}
+            if frozen_verification is not None and verifier != frozen_verification:
+                raise ValueError('Verification contract is frozen after the first accepted candidate. Repair RTL only; do not change testbench, checks, top interface or board mapping.')
             write_model_artifacts(project, payload)
+            frozen_verification = verifier
         except (ValueError,ModelOutputError) as exc:
             diagnostics=f'Candidate validation failed before commit: {exc}'
             directory=project/'generation'/f'round_{attempt:02}';directory.mkdir(parents=True,exist_ok=True)
@@ -117,7 +130,7 @@ def do_td(project: Path, stage: str, td_root: str | None) -> int:
     code, output, command, run_dir = run_td(project, stage, td_root)
     if input_hashes(project,load_manifest(project))!=build_inputs:
         code=1;output+='\nBuild inputs changed while TD was running; implementation evidence rejected.\n'
-    for name in manifest['rtl_sources']+[manifest['board_constraints'],manifest['timing_constraints']]:
+    for name in list(hdl_input_hashes(project,manifest['rtl_sources']))+[manifest['board_constraints'],manifest['timing_constraints']]:
         snapshot=run_dir/'sources'/name
         if not snapshot.is_file() or sha(snapshot)!=build_inputs.get(name):
             code=1;output+=f'\nTD source snapshot mismatch: {name}\n'
@@ -126,19 +139,15 @@ def do_td(project: Path, stage: str, td_root: str | None) -> int:
     bitstreams = [p.relative_to(project).as_posix() for p in runs_dir.glob("phy_1/*.bit")]
     timing_report = runs_dir / "phy_1" / "final_timing.rpt"
     timing = None
+    sta_coverage = None
     resources = None
     if timing_report.is_file():
         import re
 
         timing_text = timing_report.read_text(encoding="utf-8", errors="replace")
-        setup = re.search(r"\bSWNS:\s*(-?[0-9.]+)ns,\s*STNS:\s*(-?[0-9.]+)ns", timing_text)
-        hold = re.search(r"\bHWNS:\s*(-?[0-9.]+)ns,\s*HTNS:\s*(-?[0-9.]+)ns", timing_text)
-        timing = {
-            "setup_wns_ns": float(setup.group(1)) if setup else None,
-            "setup_tns_ns": float(setup.group(2)) if setup else None,
-            "hold_wns_ns": float(hold.group(1)) if hold else None,
-            "hold_tns_ns": float(hold.group(2)) if hold else None,
-        }
+        timing = parse_timing_summary(timing_text)
+        coverage_match = re.search(r'STA coverage\s*:\s*([0-9.]+)%',timing_text)
+        sta_coverage = float(coverage_match.group(1)) if coverage_match else None
     area_report = runs_dir / "phy_1" / f"{project_name}_phy.area"
     if area_report.is_file():
         import re
@@ -159,6 +168,7 @@ def do_td(project: Path, stage: str, td_root: str | None) -> int:
         "run_directory": run_dir.relative_to(project).as_posix(),
         "bitstreams": bitstreams,
         "timing_summary": timing,
+        'sta_coverage_percent':sta_coverage,
         "resource_summary": resources,
         "started_at": started_at,
         "output": output,
@@ -196,9 +206,17 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             print(f'Package gate: {reason}',file=sys.stderr)
             return 2
     selected_run = project / td_result["run_directory"] if td_result.get("run_directory") else None
+    from .quality import review_project
+    review = review_project(project,'simulation' if simulation_only else 'fpga')
+    if not review['artifact_ready']:
+        raise ValueError('Engineering review rejected stale or incomplete artifact evidence.')
+    verified_inputs = simulation_input_hashes(project,manifest)
+    build_inputs = input_hashes(project,manifest)
+    report_hashes = {name:sha(project/name) for name in ('reports/simulation.json','reports/td.json') if (project/name).is_file()}
     target = project / "deliverables"
     target.mkdir(exist_ok=True)
     artifact = target / f"{manifest['project']}-{'simulation' if simulation_only else 'delivery'}.zip"
+    pending = target / f'.{artifact.name}.{uuid.uuid4().hex}.pending'
 
     def portable_text(path: Path) -> str:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -212,38 +230,75 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             text = re.sub(r'(?<=Path=")[^"]+(?=")', ".", text, count=1)
         return text
 
-    with zipfile.ZipFile(artifact, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(pending, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for folder in ("rtl", "tb", "constraints", "board", "spec", "reports"):
             root = project / folder
             if root.exists():
                 for path in root.rglob("*"):
                     if path.is_file() and path.name != "simulation.vvp" and path.suffix.lower() != ".log":
                         relative = path.relative_to(project)
-                        if path.suffix.lower() == ".json":
+                        if path.suffix.lower() == '.json' and folder == 'reports':
                             archive.writestr(relative.as_posix(), json.dumps(json.loads(portable_text(path)), ensure_ascii=False, indent=2) + "\n")
                         else:
-                            archive.write(path, relative)
+                            archive.write(path, relative.as_posix())
         for name in ("README.md",):
             path = project / "td" / name
             if path.is_file():
-                archive.write(path, path.relative_to(project))
+                archive.write(path, path.relative_to(project).as_posix())
         archive.write(project / "project.json", "project.json")
-        archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':input_hashes(project,manifest),'bitstreams':td_result.get('bitstream_hashes',{})},indent=2))
+        archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':build_inputs,'bitstreams':td_result.get('bitstream_hashes',{}),
+            'engineering_signoff':review['engineering_signoff'],'required_open_items':review['required_open_items']},indent=2))
         if selected_run and selected_run.is_dir():
             for path in selected_run.rglob("*.al"):
                 if path.is_file():
                     archive.writestr(path.relative_to(project).as_posix(), portable_text(path))
             for path in selected_run.rglob("*"):
-                if path.is_file() and "sources" in path.relative_to(selected_run).parts and path.suffix.lower() in {".v", ".sv", ".adc", ".sdc"}:
-                    archive.write(path, path.relative_to(project))
+                if path.is_file() and "sources" in path.relative_to(selected_run).parts:
+                    archive.write(path, path.relative_to(project).as_posix())
             for relative in td_result.get("bitstreams", []):
                 bitstream = project / relative
                 if bitstream.is_file():
-                    archive.write(bitstream, bitstream.relative_to(project))
+                    archive.write(bitstream, bitstream.relative_to(project).as_posix())
             for pattern in ("*.rpt", "*.timing", "*.area", "flow.status"):
                 for path in selected_run.rglob(pattern):
                     if path.is_file():
                         archive.writestr(path.relative_to(project).as_posix(), portable_text(path))
+        for name in hdl_input_hashes(project,manifest['rtl_sources']+manifest['testbench_sources'],allow_dynamic_memory=manifest.get('verification',{}).get('kind')=='riscv-retire'):
+            if name not in archive.namelist():
+                archive.write(project/name,name)
+    # Read only after closing the writer: Python 3.11 on Windows can normalize
+    # ZipInfo paths differently while reading entries from an open write handle.
+    with zipfile.ZipFile(pending,'r') as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError('Delivery archive contains duplicate paths.')
+        inventory = '\n'.join(f'{hashlib.sha256(archive.read(name)).hexdigest()}  {name}' for name in sorted(names))+'\n'
+    with zipfile.ZipFile(pending,'a',compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('MANIFEST.sha256',inventory)
+    try:
+        if simulation_input_hashes(project,load_manifest(project)) != verified_inputs or input_hashes(project,load_manifest(project)) != build_inputs:
+            raise ValueError('Delivery inputs changed while packaging; archive rejected.')
+        if any(sha(project/name) != expected for name,expected in report_hashes.items()):
+            raise ValueError('Verification reports changed while packaging; archive rejected.')
+        current_manifest = load_manifest(project)
+        valid,reason=simulation_valid(project,current_manifest,sim_result)
+        if not valid:
+            raise ValueError('Delivery simulation evidence rejected: '+reason)
+        if not simulation_only:
+            valid,reason=implementation_valid(project,current_manifest,td_result)
+            if not valid:
+                raise ValueError('Delivery implementation evidence rejected: '+reason)
+        with zipfile.ZipFile(pending) as archive:
+            for name,expected in hdl_input_hashes(project,manifest['rtl_sources']+manifest['testbench_sources'],allow_dynamic_memory=manifest.get('verification',{}).get('kind')=='riscv-retire').items():
+                if hashlib.sha256(archive.read(name)).hexdigest() != expected:
+                    raise ValueError(f'Archived verification input differs: {name}')
+            for name,expected in td_result.get('bitstream_hashes',{}).items():
+                if hashlib.sha256(archive.read(name)).hexdigest() != expected:
+                    raise ValueError(f'Archived bitstream differs: {name}')
+        os.replace(pending,artifact)
+    finally:
+        pending.unlink(missing_ok=True)
+    artifact.with_suffix('.zip.sha256').write_text(f'{sha(artifact)}  {artifact.name}\n',encoding='utf-8')
     print(f"交付包已生成：{artifact}")
     return 0
 
@@ -272,6 +327,13 @@ def parser() -> argparse.ArgumentParser:
 
     verify = commands.add_parser("verify", help="运行自检 testbench 并保存报告")
     verify.add_argument("project")
+
+    lint = commands.add_parser('lint',help='严格 Verilator RTL lint；缺少工具时明确阻塞')
+    lint.add_argument('project')
+    review = commands.add_parser('review',help='生成规格、设计、验证、实现与交付工程审查')
+    review.add_argument('project')
+    review.add_argument('--scope',choices=('simulation','fpga'),default='fpga')
+    review.add_argument('--strict',action='store_true',help='有未关闭的必要工程检查时返回非零')
 
     td = commands.add_parser("td", help="仿真通过后调用 Anlogic TD Tcl 流程")
     td.add_argument("project")
@@ -355,6 +417,17 @@ def main(argv: list[str] | None = None) -> int:
             (root/'suite-report.json').write_text(json.dumps(results,indent=2)+'\n',encoding='utf-8')
             return 0 if all(r['simulation']=='pass' and (not args.full or r.get('package_returncode')==0) for r in results) else 1
         project = resolve_project(args.project)
+        if args.command == 'lint':
+            from .quality import lint_project
+            report = lint_project(project)
+            print(report['output'])
+            print('Lint: '+report['status'])
+            return 0 if report['status']=='pass' else 2 if report['status']=='blocked' else 1
+        if args.command == 'review':
+            from .quality import review_project
+            report = review_project(project,args.scope)
+            print((project/'reports/engineering-review.md').read_text(encoding='utf-8'))
+            return 0 if report['artifact_ready'] and (not args.strict or report['required_open_items']==0) else 2
         if args.command == "design":
             if args.repair_rounds < 0 or args.repair_rounds > 5:
                 raise ValueError("--repair-rounds 范围为 0 到 5。")

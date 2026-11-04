@@ -86,9 +86,18 @@ class TdTests(unittest.TestCase):
         self.assertIn("未生成任何 .bit", output)
 
     def test_full_flow_rejects_nan_and_infinite_timing(self) -> None:
-        code, output, _, _ = self._run_full_with_report("SWNS: NaNns HWNS: Infinityns")
+        code, output, _, _ = self._run_full_with_report("SWNS: NaNns STNS: 0ns HWNS: Infinityns HTNS: 0ns")
         self.assertEqual(code, 1)
         self.assertIn("非有限", output)
+
+    def test_full_flow_rejects_negative_total_slack_even_with_positive_wns(self) -> None:
+        code, output, _, _ = self._run_full_with_report('SWNS: 1ns STNS: -2ns HWNS: 0.1ns HTNS: 0ns')
+        self.assertEqual(code,1)
+        self.assertIn('未收敛',output)
+
+    def test_full_flow_accepts_complete_finite_closed_timing(self) -> None:
+        code, _, _, _ = self._run_full_with_report('SWNS: 1e-1ns STNS: 0ns HWNS: .02ns HTNS: 0ns')
+        self.assertEqual(code,0)
 
     def test_td_timeout_bytes_and_failed_flow_are_reported(self) -> None:
         executable = self.root / "td_commands_prompt.exe"
