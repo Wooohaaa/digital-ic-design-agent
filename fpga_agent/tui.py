@@ -26,6 +26,24 @@ from textual.widgets.option_list import Option
 
 from .terminal import COMMANDS, PROVIDERS, ProcessRunner, Session, TaskPlan, Workspace, evidence, make_plan, read_json, redact, write_json
 
+# FIGlet Fraktur lettering rendered from pyfiglet's Fraktur font (xero/figlet-fonts).
+FRAKTUR_WORDMARK = r'''    .....     .        ...                 .....                  ....              ..      ...           ....        .         ..      .
+  .d88888Neu. 'L    xH88"`~ .x8X        .H8888888x.  '`+      .x~X88888Hx.       :~"8888x :"%888x      .x88" `^x~  xH(`      x88f` `..x88. .>
+  F""""*8888888F  :8888   .f"8888Hf    :888888888888x.  !    H8X 888888888h.    8    8888Xf  8888>    X888   x8 ` 8888h    :8888   xf`*8888%
+ *      `"*88*"  :8888>  X8L  ^""`     8~    `"*88888888"   8888:`*888888888:  X88x. ?8888k  8888X   88888  888.  %8888   :8888f .888  `"`
+  -....    ue=:. X8888  X888h          !      .  `f""""     88888:        `%8  '8888L'8888X  '%88X  <8888X X8888   X8?    88888' X8888. >"8x
+         :88N  ` 88888  !88888.         ~:...-` :8L <)88: . `88888          ?>  "888X 8888X:xnHH(`` X8888> 488888>"8888x  88888  ?88888< 888>
+         9888L   88888   %88888            .   :888:>X88! `. ?888%           X    ?8~ 8888X X8888   X8888>  888888 '8888L 88888   "88888 "8%
+  uzu.   `8888L  88888 '> `8888>        :~"88x 48888X ^`    ~*??.            >  -~`   8888> X8888   ?8888X   ?8888>'8888X 88888 '  `8888>
+,""888i   ?8888  `8888L %  ?888   !    <  :888k'88888X     .x88888h.        <   :H8x  8888  X8888    8888X h  8888 '8888~ `8888> %  X88!
+4  9888L   %888>  `8888  `-*""   /       d8888f '88888X   :"""8888888x..  .x    8888> 888~  X8888     ?888  -:8*"  <888"   `888X  `~""`   :
+'  '8888   '88%     "888.      :"       :8888!    ?8888>  `    `*888888888"     48`" '8*~   `8888!`    `*88.      :88%       "88k.      .~
+     "*8Nu.z*"        `""***~"`         X888!      8888~          ""***""        ^-==""      `""          ^"~====""`           `""*==~~`
+                                        '888       X88f
+                                         '%8:     .8*"
+                                            ^----~"`
+'''
+
 HELP = """### 在终端完成设计闭环
 直接描述需求；使用 `@文件路径` 补充代码或规格。模型可以回答问题，也可以调用已有的设计、验证和交付工具。
 
@@ -45,7 +63,7 @@ HELP = """### 在终端完成设计闭环
 | `/new` · `/resume` · `/export` | 会话管理与 Markdown 导出 |
 
 **Enter** 发送 · **Shift+Enter** 换行 · **Tab** 补全斜杠命令 · **↑/↓** 历史输入
-**Ctrl+P** 命令面板 · **Ctrl+O** 文件搜索 · **Ctrl+B** 项目栏 · **Ctrl+J** 日志 · **Shift+Tab** Plan / Build
+**Ctrl+P** 命令面板 · **Ctrl+O** 文件搜索 · **Ctrl+B** 选择工程 · **Ctrl+J** 日志 · **Shift+Tab** 模式
 **Esc** 取消运行 · **Ctrl+N** 新会话 · **Ctrl+Q** 退出
 
 API Key 只在当前进程内存和子进程环境中使用。会话与设置保存在当前工作区 `.fpga-agent/`。
@@ -72,7 +90,7 @@ class Prompt(TextArea):
 
     def __init__(self, **kwargs):
         super().__init__(show_line_numbers=False, highlight_cursor_line=False,
-            placeholder="描述设计需求，或输入 / 查看命令 · @文件补充上下文", **kwargs)
+            placeholder="描述设计需求，或输入 / 查看命令", **kwargs)
         self.input_history: list[str] = []
         self.input_history_index = 0
         self.draft = ""
@@ -125,7 +143,7 @@ class MessageCard(Vertical):
         self.role, self.text = role, text
 
     def compose(self) -> ComposeResult:
-        names = {"user": "YOU", "assistant": "IC FORGE", "tool": "TOOL RESULT", "system": "WORKSPACE"}
+        names = {"user": "YOU", "assistant": "ℑℭ 𝔉𝔬𝔯𝔤𝔢", "tool": "TOOL RESULT", "system": "WORKSPACE"}
         yield Static(names.get(self.role, self.role.upper()), classes="role")
         yield Markdown(self.text, open_links=False)
 
@@ -236,11 +254,11 @@ class ForgeApp(App):
     BINDINGS = [
         Binding("ctrl+p", "palette", "命令", priority=True),
         Binding("ctrl+b", "sidebar", "项目", priority=True),
-        Binding("ctrl+j", "logs", "日志", priority=True),
-        Binding("ctrl+o", "files", "文件", priority=True),
-        Binding("ctrl+n", "new_session", "新会话", priority=True),
-        Binding("shift+tab", "mode", "Plan / Build", priority=True),
-        Binding("escape", "cancel_task", "取消", priority=True),
+        Binding("ctrl+j", "logs", "日志", show=False, priority=True),
+        Binding("ctrl+o", "files", "文件", show=False, priority=True),
+        Binding("ctrl+n", "new_session", "新会话", show=False, priority=True),
+        Binding("shift+tab", "mode", "模式", priority=True),
+        Binding("escape", "cancel_task", "取消", show=False, priority=True),
         Binding("ctrl+c", "interrupt", show=False, priority=True),
         Binding("ctrl+q", "safe_quit", "退出", priority=True),
         Binding("f1", "help", show=False),
@@ -272,7 +290,8 @@ class ForgeApp(App):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="topbar"):
-            yield Static("[bold #63ead5]◈[/]  [bold]IC FORGE[/]  [#65718b]│[/]  [#a7b0c4]digital design workspace[/]", id="brand")
+            yield Static("[bold #55aaff]ℑℭ 𝔉𝔬𝔯𝔤𝔢[/]", id="brand")
+            yield Static(id="project-badge", classes="muted")
             yield Static(id="connection-status")
         with Horizontal(id="layout"):
             with Vertical(id="sidebar"):
@@ -286,28 +305,21 @@ class ForgeApp(App):
                 yield Button("◇  完整实现交付", id="quick-flow")
                 yield Static(id="session-info", classes="muted")
             with Vertical(id="center"):
-                with Horizontal(id="conversation-bar"):
-                    yield Static("CONVERSATION", id="conversation-title")
-                    yield Static(id="project-badge")
                 with VerticalScroll(id="transcript"):
                     with Vertical(id="welcome"):
-                        yield Static("╭─ ◈ ─────────────────────────╮\n│   I C   F O R G E           │\n╰────────────────────────────╯", id="wordmark")
-                        yield Static("从想法，到经过验证的 RTL。", id="welcome-title")
-                        yield Static("在熟悉的终端里设计、验证、实现、交付。", id="welcome-subtitle")
-                        with Horizontal(id="welcome-cards"):
-                            yield Button("01  连接模型\n/connect", id="welcome-connect")
-                            yield Button("02  选择工程\n/project", id="welcome-project")
-                            yield Button("03  开始验证\n/verify", id="welcome-verify")
-                        yield Markdown("直接输入需求，例如：**设计一个带溢出检测的 32 位计数器，并完成仿真验证。**\n\n已有工程可直接 `/verify`，无需模型 Key。`@rtl/core.v` 可附加文件。", id="welcome-note")
+                        yield Static(FRAKTUR_WORDMARK, id="wordmark", markup=False)
+                        yield Static("从规格到经过验证的 RTL。", id="welcome-title")
+                        yield Static("描述设计需求，或输入 / 查看命令；用 @路径附加文件。", id="welcome-subtitle")
+                        yield Static("/connect 模型   /project 工程   /verify 验证", id="welcome-note", classes="muted")
                 yield RichLog(id="logs", highlight=False, markup=False, wrap=True, max_lines=2000)
                 with Horizontal(id="task-row"):
                     yield LoadingIndicator(id="spinner")
-                    yield Static("Ready · 所有验证工具可独立运行", id="task-status")
+                    yield Static("Ready", id="task-status")
                 yield Static(id="suggestions")
                 with Vertical(id="composer"):
                     with Horizontal(id="composer-bar"):
                         yield Static(id="mode")
-                        yield Static("Enter 发送   Shift+Enter 换行   / 命令   @ 文件", id="input-hint")
+                        yield Static("Enter 发送 · / 命令 · @ 文件", id="input-hint")
                     yield Prompt(id="prompt")
             with Vertical(id="inspector"):
                 yield Static("DESIGN EVIDENCE", classes="section-title")
@@ -334,7 +346,7 @@ class ForgeApp(App):
     def on_resize(self, event) -> None:
         if self.screen_stack:
             self.screen_stack[0].set_class(event.size.width < 125, "compact")
-            self.screen_stack[0].set_class(event.size.width < 90, "narrow")
+            self.screen_stack[0].set_class(event.size.width < 145, "narrow")
 
     def environment(self) -> dict[str, str]:
         env = dict(os.environ)
@@ -354,36 +366,36 @@ class ForgeApp(App):
 
     def refresh_panels(self) -> None:
         ready = self.model_ready()
-        self.query_one("#connection-status", Static).update(Text(f"{'●' if ready else '○'} {self.settings.provider} / {self.settings.model}", style="#63ead5" if ready else "#b8a3e8"))
-        self.query_one("#mode", Static).update(f"[bold {'#63ead5' if self.settings.mode == 'build' else '#c3a3ff'}]{self.settings.mode.upper()}[/]  [#65718b]· Shift+Tab[/]")
-        self.query_one("#project-badge", Static).update(Text(self.selected.name if self.selected else "No project selected", style="#a7b0c4"))
-        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#65718b"))
+        self.query_one("#connection-status", Static).update(Text(f"{'●' if ready else '○'} {self.settings.provider} / {self.settings.model}", style="#55aaff" if ready else "#8998a9"))
+        self.query_one("#mode", Static).update(f"[bold {'#55aaff' if self.settings.mode == 'build' else '#9bb8d4'}]{self.settings.mode.upper()}[/]")
+        self.query_one("#project-badge", Static).update(Text(self.selected.name if self.selected else "Ctrl+B 选择工程", style="#8998a9"))
+        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#8998a9"))
         self.project_paths = self.workspace.projects()
         options = self.query_one("#projects", OptionList)
         options.clear_options()
         for i, project in enumerate(self.project_paths):
             selected = project == self.selected
-            options.add_option(Option(Text(("▸ " if selected else "  ") + project.name, style="#63ead5" if selected else "#a7b0c4"), id=str(i)))
+            options.add_option(Option(Text(("▸ " if selected else "  ") + project.name, style="#55aaff" if selected else "#b9c6d5"), id=str(i)))
             if selected:
                 options.highlighted = i
         if not self.project_paths:
             options.add_option(Option("暂无工程 · /init name", disabled=True))
-        content = "[#65718b]选择工程后显示当前证据。[/]"
+        content = "[#8998a9]选择工程后显示当前证据。[/]"
         if self.selected:
             data = evidence(self.selected)
             manifest = read_json(self.selected / "project.json", {})
-            colors = {"current": "#63ead5", "missing": "#65718b", "stale": "#efc884", "failed": "#ff7f9b"}
+            colors = {"current": "#55aaff", "missing": "#8998a9", "stale": "#efc884", "failed": "#ff7f9b"}
             labels = {"current": "CURRENT", "missing": "NOT RUN", "stale": "STALE", "failed": "FAILED"}
             board = read_json(self.selected / "board/hx1p35a.json", {})
             hz = board.get("nominal_system_clock_hz")
             clock = f"{hz / 1e6:g} MHz nominal" if isinstance(hz, (int, float)) else "clock not specified"
-            content = f"[bold]{escape(str(manifest.get('top_module', '?')))}[/]\n[#65718b]{escape(str(manifest.get('board', '?')))}\n{clock}[/]\n\n"
+            content = f"[bold]{escape(str(manifest.get('top_module', '?')))}[/]\n[#8998a9]{escape(str(manifest.get('board', '?')))}\n{clock}[/]\n\n"
             for key, title in (("simulation", "SIM"), ("implementation", "TD")):
                 state = data[key]
                 content += f"[{colors[state]}]● {title:<5} {labels[state]}[/]\n"
             timing = data["timing"]
             if timing:
-                content += "\n[#65718b]RECORDED WNS / ns[/]\n" + f"Setup   {timing.get('setup_wns_ns', '—')}\nHold    {timing.get('hold_wns_ns', '—')}\n"
+                content += "\n[#8998a9]RECORDED WNS / ns[/]\n" + f"Setup   {timing.get('setup_wns_ns', '—')}\nHold    {timing.get('hold_wns_ns', '—')}\n"
             lut = data["resources"].get("lut6", {}).get("used")
             if lut is not None:
                 content += f"\nLUT6    {lut:,}\n"
@@ -395,13 +407,13 @@ class ForgeApp(App):
         except FileNotFoundError:
             td = False
         icarus = bool(shutil.which("iverilog") or (Path(__file__).resolve().parent.parent / ".tools/icarus/bin/iverilog.exe").is_file())
-        self.query_one("#tools", Static).update(f"[{'#63ead5' if icarus else '#efc884'}]● Icarus Verilog[/]\n[{'#63ead5' if td else '#efc884'}]● Anlogic TD[/]\n[{'#63ead5' if ready else '#65718b'}]● Model {'configured' if ready else 'not connected'}[/]")
+        self.query_one("#tools", Static).update(f"[{'#55aaff' if icarus else '#efc884'}]● Icarus Verilog[/]\n[{'#55aaff' if td else '#efc884'}]● Anlogic TD[/]\n[{'#55aaff' if ready else '#8998a9'}]● Model {'configured' if ready else 'not connected'}[/]")
         self.refresh_pipeline()
 
     def refresh_pipeline(self) -> None:
         lines = []
         for index, (key, name) in enumerate((("rtl", "RTL / SPEC"), ("sim", "SIMULATION"), ("syn", "SYNTHESIS"), ("route", "PLACE & ROUTE"), ("package", "DELIVERY")), 1):
-            color = "#63ead5" if self.busy and self.phase == key else "#8292b0"
+            color = "#55aaff" if self.busy and self.phase == key else "#7e8fa4"
             lines.append(f"[{color}]{index:02d}   {name}[/]")
             if index < 5:
                 lines.append("[#43516a]      ↓[/]")
@@ -409,7 +421,7 @@ class ForgeApp(App):
 
     def tick(self) -> None:
         if self.busy:
-            self.query_one("#task-status", Static).update(Text(f"{self.task_title}   {int(time.monotonic() - self.started)}s · Esc 取消", style="#63ead5"))
+            self.query_one("#task-status", Static).update(Text(f"{self.task_title}   {int(time.monotonic() - self.started)}s · Esc 取消", style="#55aaff"))
 
     async def render_message(self, role: str, text: str) -> None:
         self.query_one("#welcome").display = False
@@ -423,7 +435,7 @@ class ForgeApp(App):
         self.session.messages = self.session.messages[-100:]
         self.workspace.save_session(self.session)
         await self.render_message(role, text)
-        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#65718b"))
+        self.query_one("#session-info", Static).update(Text(f"SESSION {self.session.id[:8]}\n{len(self.session.messages)} messages · auto saved", style="#8998a9"))
 
     async def select_project(self, path: Path) -> None:
         if self.busy:
@@ -453,7 +465,7 @@ class ForgeApp(App):
         widget = self.query_one("#suggestions", Static)
         matches = [(command, hint) for command, hint in COMMANDS.items() if command.startswith(text)] if text.startswith("/") and " " not in text else []
         widget.display = bool(matches)
-        widget.update(Text("\n".join(f"{command:<13} {hint}" for command, hint in matches[:4]), style="#a7b0c4"))
+        widget.update(Text("\n".join(f"{command:<13} {hint}" for command, hint in matches[:4]), style="#b9c6d5"))
 
     @on(Prompt.Submitted)
     async def prompt_submitted(self, event: Prompt.Submitted) -> None:
@@ -706,7 +718,7 @@ class ForgeApp(App):
         self.busy = False
         self.runner = None
         self.query_one("#spinner").display = False
-        self.query_one("#task-status", Static).update(Text(label, style="#a7b0c4"))
+        self.query_one("#task-status", Static).update(Text(label, style="#b9c6d5"))
         self.refresh_panels()
 
     def start_plan(self, plan: TaskPlan) -> None:
@@ -838,9 +850,8 @@ class ForgeApp(App):
             except (ValueError, OSError) as exc:
                 await self.add_message("system", str(exc))
 
-    def action_sidebar(self) -> None:
-        widget = self.query_one("#sidebar")
-        widget.display = not widget.display
+    async def action_sidebar(self) -> None:
+        await self.submit_command("/project")
 
     def action_logs(self) -> None:
         widget = self.query_one("#logs")
