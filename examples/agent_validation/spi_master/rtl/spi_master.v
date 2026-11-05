@@ -23,4 +23,3 @@ module spi_master #(
     assign mosi = 1'b0;
     assign cs_n = 1'b1;
 endmodule
-
