@@ -34,6 +34,21 @@ icforge task logs
 
 本轮由 **gpt-6-luna** 生成了单周期、多周期、两级流水线三份 RV32I CPU。每份通过 114 个程序、18,099 条指令提交比对、片上 ROM/RAM 签名测试和 50 MHz TD 实现。实测表格见 [riscv-results.md](docs/riscv-results.md)，接口和覆盖范围见 [riscv-flow.md](docs/riscv-flow.md)。
 
+## 指挥外部 Agent
+
+新增 `orchestrate` 模式：IC Forge 负责规划、分工、依赖协调和宿主验收，调用本机 Codex、Claude Code、OpenCode 的非交互 CLI。简单任务可交给一个执行者；独立模块可并行实现，审查等待实现完成，共用文件自动串行。分工在隔离 Git worktree 中执行，限定范围的变更通过检查后导入工作区。
+
+```text
+/provider codex
+/model native
+/mode orchestrate
+/agents 2 codex
+/orchestrate --workspace 实现两个独立模块，安排审查，并通过现有测试
+/agents
+```
+
+主管模型和执行者分别配置；`native` 使用本机 Codex 的模型配置与登录。进入编排模式后直接输入目标即可启动持久任务，支持 `/pause`、`/continue` 和追加要求。工作区须为有提交记录的 Git 仓库；通用工程应预先声明验收命令。完整配置、混用多个 CLI、恢复规则及实测范围见 [Agent 编排指南](docs/orchestration.md)。
+
 ## 模型与验证
 
 TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比。额外三轮板上生成也逐 token 通过独立参考校验（每轮 16 个新 token，以下为达到长度上限时的原始片段）：

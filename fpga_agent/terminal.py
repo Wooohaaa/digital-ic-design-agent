@@ -43,6 +43,10 @@ COMMANDS = {
     "/skills": "查看兼容技能目录", "/skill": "预览技能：/skill 名称或完整 ID",
     "/recall": "检索历史任务或步骤：/recall 词语 / ID:步数",
     "/context": "查看长期任务上下文预算与裁剪记录",
+    "/mode": "执行模式：engineer / orchestrate（指挥外部 agent）",
+    "/orchestrate": "编排目标；--workspace 为代码仓库验收，--simulation-only 仅仿真",
+    "/agents": "查看外部 agent；/agents 2 codex 设置后续并发上限与执行者",
+    "/ask": "在编排模式下进行一次普通问答",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
     "/export": "导出 Markdown 会话", "/cancel": "取消当前任务", "/quit": "退出",
 }
@@ -101,6 +105,9 @@ class Settings:
     theme: str = "forge"
     logo: str = "block"
     autonomy: str = "auto"
+    execution: str = 'engineer'
+    agent_workers: str = '3'
+    agent_backends: str = 'codex,claude,opencode'
 
 
 @dataclass
@@ -140,6 +147,12 @@ class Workspace:
             result.logo = "block"
         if result.autonomy not in {"auto", "manual"}:
             result.autonomy = "auto"
+        if result.execution not in {'engineer','orchestrate'}:
+            result.execution='engineer'
+        if not result.agent_workers.isdigit() or not 1<=int(result.agent_workers)<=8:
+            result.agent_workers='3'
+        if any(name not in {'codex','claude','opencode'} for name in result.agent_backends.split(',')):
+            result.agent_backends='codex,claude,opencode'
         return result
 
     def save_settings(self, settings: Settings) -> None:
@@ -349,13 +362,26 @@ class ProcessRunner:
         self.cancelled = False
 
     async def run(self, argv: list[str], cwd: Path, env: dict[str, str], on_output: Callable[[str], None],
-                  on_spawn: Callable[[int], None] | None = None) -> int:
+                  on_spawn: Callable[[int], None] | None = None, *, stdin_text: str | None = None) -> int:
         if self.cancelled:
             return 130
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
         self.process = await asyncio.create_subprocess_exec(*argv, cwd=cwd, env=env,
+            stdin=asyncio.subprocess.PIPE if stdin_text is not None else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **options)
+        feeder = None
         try:
+            if stdin_text is not None:
+                async def feed():
+                    assert self.process is not None and self.process.stdin is not None
+                    try:
+                        self.process.stdin.write(stdin_text.encode('utf-8'))
+                        await self.process.stdin.drain()
+                    except (BrokenPipeError,ConnectionResetError):
+                        pass
+                    finally:
+                        self.process.stdin.close()
+                feeder = asyncio.create_task(feed())
             if on_spawn:
                 on_spawn(self.process.pid)
             if self.cancelled:
@@ -382,6 +408,8 @@ class ProcessRunner:
         finally:
             if self.process and self.process.returncode is None:
                 await self.cancel()
+            if feeder:
+                await asyncio.gather(feeder,return_exceptions=True)
             self.process = None
 
     async def cancel(self) -> None:

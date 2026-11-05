@@ -204,16 +204,17 @@ def _codex_request(
         args = [
             command,
             "exec",
-            "--ignore-user-config",
             "--ephemeral",
             "--skip-git-repo-check",
             "--sandbox",
             "read-only",
-            "--model",
-            model,
             "--output-last-message",
             str(last_message),
         ]
+        if model != 'native':
+            args += ['--ignore-user-config','--model',model]
+        else:
+            args += ['-c','approval_policy="never"']
         if schema is not None:
             schema_file = tmp / "schema.json"
             schema_file.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")

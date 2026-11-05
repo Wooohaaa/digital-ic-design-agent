@@ -88,6 +88,17 @@ class WorkspaceTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_large_unicode_stdin_is_literal_and_does_not_deadlock_stdout(self):
+        runner=ProcessRunner()
+        payload=('你好 $HOME $(whoami) `echo unsafe` ; & |\n' * 10000)
+        lines=[]
+        script="import sys,hashlib; print('x'*100000,flush=True); print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())"
+        code=await asyncio.wait_for(runner.run([sys.executable,'-c',script],Path.cwd(),
+            dict(os.environ,PYTHONIOENCODING='utf-8'),lines.append,stdin_text=payload),10)
+        import hashlib
+        self.assertEqual(code,0)
+        self.assertEqual(lines[-1],hashlib.sha256(payload.encode('utf-8')).hexdigest())
+
     async def test_streams_unicode_and_long_lines_without_pipe_overflow(self):
         runner = ProcessRunner()
         lines = []

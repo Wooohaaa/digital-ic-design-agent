@@ -56,6 +56,10 @@ HELP = """### 在终端完成设计闭环
 | `/skills` · `/skill 名称` | 查看兼容技能目录、预览技能正文 |
 | `/recall 词语或ID:步数` | 检索历史经验或归档步骤 |
 | `/context [任务ID]` | 查看规划上下文字符预算、各部分用量及裁剪记录 |
+| `/mode orchestrate` · `/mode engineer` | 切换外部 agent 编排 / 原有工程模式 |
+| `/orchestrate 目标` | 指挥 Codex、Claude Code、OpenCode 分工，按依赖并行 |
+| `/agents` · `/agents 2 codex` | 查看可用 CLI，设置后续并发上限与执行者 |
+| `/ask 问题` | 编排模式中的普通问答 |
 | `/new` · `/resume` · `/export` | 会话管理与 Markdown 导出 |
 
 **Enter** 发送 · **Shift+Enter** 换行 · **Tab** 补全斜杠命令 · **↑/↓** 历史输入
@@ -412,6 +416,8 @@ class ForgeApp(App):
         status.append('● ' if ready else '○ ', style=palette.highlight if ready else palette.warning)
         status.append(f'{self.settings.provider}/{self.settings.model}', style=palette.foreground)
         status.append(f'  ·  {self.settings.mode.upper()}', style=palette.muted)
+        if self.settings.execution=='orchestrate':
+            status.append('  ·  ORCHESTRATE',style=palette.highlight)
         status.append(f'  ·  {self.selected.name if self.selected else self.workspace.root.name}', style=palette.muted)
         if self.queued_input:
             status.append(f"  ·  {len(self.queued_input)} queued", style=palette.warning)
@@ -519,10 +525,15 @@ class ForgeApp(App):
             allowed = {"/tasks", "/pause", "/stop", "/steer", "/status", "/help", "/?", "/connect",
                        "/theme", "/logo", "/model", "/provider", "/open", "/files", "/artifacts",
                        "/export", "/diff", "/quit", "/exit", "/cancel", "/auto",
-                       "/skills", "/skill", "/recall", "/context"}
+                       "/skills", "/skill", "/recall", "/context", "/agents", "/mode"}
             if text.partition(" ")[0] not in allowed:
                 raise ValueError("长期任务正在操作工作区。用 /pause 暂停，或直接输入补充要求。")
         if not text.startswith("/"):
+            if self.settings.execution=='orchestrate':
+                if not self.model_ready():
+                    raise ValueError('先配置主管模型；本机 Codex 可用 /provider codex 和 /model native。')
+                await self.offer_plan(self.long_task_plan(text,'delivery' if self.selected else 'workspace',self.selected,mode='orchestrate'))
+                return
             local = {"运行仿真": "verify", "验证当前工程": "verify", "run tests": "verify", "完整实现交付": "flow", "生成交付包": "package"}
             if text in local:
                 await self.offer_plan(make_plan(self.workspace, self.settings, local[text], {}, self.selected))
@@ -532,7 +543,46 @@ class ForgeApp(App):
         command, _, rest = text.partition(" ")
         rest = rest.strip()
         tokens = [next((part for part in match if part), "") for match in re.findall(r'"([^"]*)"|\'([^\']*)\'|(\S+)', rest)] if rest else []
-        if command == "/task":
+        if command in {'/mode','/agents','/orchestrate','/ask'}:
+            from .agent_backends import available
+            if command=='/mode':
+                if rest:
+                    if rest not in {'engineer','orchestrate'}:
+                        raise ValueError('/mode engineer 或 /mode orchestrate。')
+                    self.settings.execution=rest
+                    self.workspace.save_settings(self.settings)
+                    self.refresh_panels()
+                await self.add_message('system','执行模式：'+self.settings.execution+'；新任务使用该模式。')
+            elif command=='/agents':
+                if tokens:
+                    if not tokens[0].isdigit() or not 1<=int(tokens[0])<=8:
+                        raise ValueError('用法：/agents 1..8 [codex,claude,opencode]。')
+                    if len(tokens)>1 and any(name not in {'codex','claude','opencode'} for name in tokens[1].split(',')):
+                        raise ValueError('执行者名称无效。')
+                    self.settings.agent_workers=tokens[0]
+                    if len(tokens)>1:
+                        self.settings.agent_backends=tokens[1]
+                    self.workspace.save_settings(self.settings)
+                catalog=available()
+                body='\n'.join(f"- {item['name']}: {'已安装' if item['available'] else '未安装'}" for item in catalog)
+                body+=f'\n\n后续任务最大并发 {self.settings.agent_workers}；启用 {self.settings.agent_backends}。'
+                tasks=task_store.list()
+                if tasks:
+                    body+='\n\n```json\n'+json.dumps(tasks[0].get('delegations',[]),ensure_ascii=False,indent=2)+'\n```'
+                await self.add_message('assistant',body)
+            elif command=='/ask':
+                if not rest:
+                    raise ValueError('/ask 问题。')
+                await self.start_chat(rest)
+            else:
+                if not rest or not self.model_ready():
+                    raise ValueError('先连接主管模型，再用 /orchestrate 目标。')
+                simulation=rest.startswith('--simulation-only ')
+                workspace_target=rest.startswith('--workspace ')
+                objective=rest.removeprefix('--simulation-only ').removeprefix('--workspace ').strip()
+                target='simulation' if simulation else 'workspace' if workspace_target or not self.selected else 'delivery'
+                await self.offer_plan(self.long_task_plan(objective,target,None if workspace_target else self.selected,mode='orchestrate'))
+        elif command == "/task":
             simulation = rest.startswith("--simulation-only ")
             objective = rest.removeprefix("--simulation-only ").strip() if simulation else rest
             if not objective:
@@ -701,10 +751,13 @@ class ForgeApp(App):
         else:
             self.start_plan(plan)
 
-    def long_task_plan(self, objective: str, target: str, project: Path | None) -> TaskPlan:
+    def long_task_plan(self, objective: str, target: str, project: Path | None, *, mode: str | None = None) -> TaskPlan:
         argv = [sys.executable, "-u", "-m", "fpga_agent", "task", "start", objective,
                 "--workspace", str(self.workspace.root), "--provider", self.settings.provider,
-                "--model", self.settings.model, "--target", target]
+                "--model", self.settings.model, "--target", target,'--mode',mode or self.settings.execution,
+                '--max-agents',self.settings.agent_workers,'--agents',self.settings.agent_backends]
+        if target=='workspace' and (self.workspace.root/'.icforge/checks.json').is_file():
+            argv += ['--checks-file','.icforge/checks.json']
         if project:
             argv += ["--project", project.relative_to(self.workspace.root).as_posix()]
         return TaskPlan("启动长期任务", [argv])
@@ -993,17 +1046,23 @@ class ForgeApp(App):
         active = ""
         for task in store.list()[:10]:
             task_id = task["id"]
-            marker = (task["status"], task["iterations"], (task["steps"][-1].get("status") if task["steps"] else ""))
+            batch=task.get('delegations',[])[-1] if task.get('delegations') else {}
+            jobs=batch.get('jobs',[])
+            marker = (task["status"], task["iterations"], (task["steps"][-1].get("status") if task["steps"] else ""),tuple((job['id'],job['status'],job['attempts']) for job in jobs))
             previous = self.long_task_seen.get(task_id)
             self.long_task_seen[task_id] = marker
             if task["status"] in {"queued", "running"}:
                 active = f"task {task_id[:6]} · {task['iterations']}/{task['limits']['steps']}"
+                if jobs:
+                    active+=f" · agents {sum(j['status']=='completed' for j in jobs)}/{len(jobs)}"
                 report = task.get('context_budget',{})
                 if report.get('after_chars'):
                     active += f" · ctx {report['after_chars']:,} chars"
             if previous == marker or (previous is None and task["status"] not in {"queued", "running", "interrupted"}):
                 continue
             message = f"长期任务 `{task_id}` · **{task['status']}** · {task['iterations']}/{task['limits']['steps']} 步"
+            if jobs:
+                message+='\n\n'+' · '.join(f"{job['id']}({job['executor']}): {job['status']}" for job in jobs)
             if task["steps"]:
                 decision = task["steps"][-1].get("decision", {})
                 if decision.get("message"):
@@ -1038,7 +1097,7 @@ class ForgeApp(App):
     async def picked_command(self, command: str | None) -> None:
         if not command:
             return
-        if command in ("/init", "/cpu", "/design", "/open", "/model", "/provider", "/export"):
+        if command in ("/init", "/cpu", "/design", "/open", "/model", "/provider", "/export", "/orchestrate", "/ask"):
             self.query_one("#prompt", Prompt).load_text(command + " ")
             self.query_one("#prompt").focus()
         else:

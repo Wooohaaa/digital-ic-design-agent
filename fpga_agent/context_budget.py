@@ -22,7 +22,7 @@ def pack_context(context: dict, budget: int = 96000) -> tuple[dict, dict]:
     reserve = min(8000, budget // 4)
     capacity = budget - reserve
     protected = {"objective", "acceptance_target", "steering", "memory", "plan", "project_instructions",
-                 "task_projects", "last_observation", "loaded_skills", "remaining_iterations", "project"}
+                 "task_projects", "last_observation", "loaded_skills", "remaining_iterations", "project", "orchestration"}
     critical = {key: value for key, value in packed.items() if key in protected}
     if size(critical) + 3000 > capacity:
         raise ContextBudgetError("目标、追加要求、已加载技能和当前观察超过上下文预算；请 /continue ID --context-chars 更大值，原始记录已保留。")

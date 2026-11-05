@@ -16,6 +16,27 @@ from fpga_agent.tui import Connection, ForgeApp, Picker, Prompt
 
 
 class TerminalUITests(unittest.IsolatedAsyncioTestCase):
+    async def test_orchestration_commands_persist_settings_and_obey_plan_mode(self):
+        app=ForgeApp(self.root)
+        app.settings.provider='codex'
+        app.settings.model='native'
+        app.settings.mode='plan'
+        async with app.run_test(size=(110,40)):
+            await app.submit_command('/mode orchestrate')
+            await app.submit_command('/agents 2 codex')
+            self.assertEqual(app.workspace.settings().execution,'orchestrate')
+            self.assertEqual(app.workspace.settings().agent_workers,'2')
+            await app.submit_command('并行实现两个模块并审查')
+            argv=app.pending.commands[0]
+            self.assertEqual(argv[argv.index('--mode')+1],'orchestrate')
+            self.assertEqual(argv[argv.index('--target')+1],'workspace')
+            self.assertEqual(argv[argv.index('--max-agents')+1],'2')
+            self.assertFalse(list((app.workspace.state/'tasks').glob('*/task.json')))
+            await app.submit_command('/mode engineer')
+            await app.submit_command('/orchestrate --workspace 修复测试')
+            self.assertIn('修复测试',app.pending.commands[0])
+            self.assertEqual(app.pending.commands[0][app.pending.commands[0].index('--mode')+1],'orchestrate')
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

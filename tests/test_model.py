@@ -12,6 +12,19 @@ from fpga_agent import model
 
 
 class RequestJsonTests(unittest.TestCase):
+    def test_native_codex_planner_keeps_login_config_and_readonly_permissions(self):
+        captured=[]
+        def fake_run(args,**kwargs):
+            captured.extend(args)
+            Path(args[args.index('--output-last-message')+1]).write_text('{"ok":true}')
+            return CompletedProcess(args,0,stdout='',stderr='')
+        with tempfile.TemporaryDirectory() as directory, patch.object(model.subprocess,'run',side_effect=fake_run):
+            self.assertEqual(model.request_json('plan',model='native',workspace=Path(directory)),{'ok':True})
+        self.assertNotIn('--ignore-user-config',captured)
+        self.assertNotIn('--model',captured)
+        self.assertIn('read-only',captured)
+        self.assertIn('approval_policy="never"',captured)
+
     def test_codex_uses_read_only_cli_and_parses_last_message(self) -> None:
         response_text = '{"ok": true}'
         captured: dict[str, object] = {}

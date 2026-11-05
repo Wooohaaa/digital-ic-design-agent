@@ -20,6 +20,8 @@ from pathlib import Path
 from .terminal import ProcessRunner, Settings, Workspace, evidence, make_plan, read_json, redact, timestamp, write_json
 from .context_budget import ContextBudgetError, pack_context, size
 from .knowledge import READ_ACTIONS, execute_read
+from .agent_backends import BACKENDS, available as available_agents
+from .orchestration import Orchestrator, validate_checks, verify_workspace, workspace_gate, source_paths, imported_paths, git as orchestration_git
 
 TERMINAL = {"completed", "cancelled"}
 TASK_LOG_BYTES = 20_000_000
@@ -167,11 +169,30 @@ class TaskStore:
 
     def create(self, objective: str, *, project: str = "", target: str = "delivery",
                settings: Settings | None = None, max_steps: int = 64,
-               max_hours: float = 24, max_failures: int = 3, context_chars: int = 96000) -> dict:
+               max_hours: float = 24, max_failures: int = 3, context_chars: int = 96000,
+               mode: str = 'engineer', executors: list[str] | None = None, max_agents: int = 3,
+               agent_models: dict | None = None, agent_timeout: int = 3600, checks: list | None = None) -> dict:
         if not isinstance(objective, str) or not objective.strip() or len(objective) > 60000:
             raise ValueError("任务目标不能为空，且不能超过 60,000 字符。")
-        if target not in {"simulation", "delivery"}:
-            raise ValueError("验收目标必须为 simulation 或 delivery。")
+        if target not in {"simulation", "delivery", "workspace"}:
+            raise ValueError("验收目标必须为 simulation、delivery 或 workspace。")
+        if mode not in {'engineer','orchestrate'}:
+            raise ValueError('模式须为 engineer 或 orchestrate。')
+        executors = list(dict.fromkeys(BACKENDS if executors is None else executors))
+        if not executors or any(name not in BACKENDS for name in executors):
+            raise ValueError('执行者只能选择 codex、claude、opencode。')
+        if type(max_agents) is not int or not 1<=max_agents<=8 or type(agent_timeout) is not int or not 1<=agent_timeout<=28800:
+            raise ValueError('并发 agent 须为 1..8，分工超时须为 1..28,800 秒。')
+        if target=='workspace' and mode!='orchestrate':
+            raise ValueError('workspace 验收用于 orchestrate 模式。')
+        accepted_checks = validate_checks(checks) if target=='workspace' else []
+        agent_models=agent_models or {}
+        if not isinstance(agent_models,dict) or any(k not in BACKENDS or not isinstance(v,str) or len(v)>200 for k,v in agent_models.items()):
+            raise ValueError('执行者模型映射无效。')
+        if mode=='orchestrate':
+            if Path(orchestration_git(self.workspace.root,'rev-parse','--show-toplevel').decode().strip()).resolve()!=self.workspace.root:
+                raise ValueError('编排工作区必须为 Git 仓库根目录。')
+            orchestration_git(self.workspace.root,'rev-parse','HEAD')
         if type(max_steps) is not int or not 1 <= max_steps <= 10000:
             raise ValueError("max_steps 必须为 1..10000。")
         if not isinstance(max_hours, (int, float)) or isinstance(max_hours, bool) or not 0 < max_hours <= 720:
@@ -190,6 +211,9 @@ class TaskStore:
                 "limits": {"steps": max_steps, "seconds": max_hours * 3600, "failures": max_failures, "context_chars":context_chars},
                 "iterations": 0, "elapsed_seconds": 0.0, "steps": [], "plan": [], "steering": [],
                 "planner_failures": 0, "memory": "", "loaded_skills": []}
+        task.update(mode=mode,checks=accepted_checks,delegations=[],orchestration={
+            'enabled':mode=='orchestrate','executors':executors,'max_parallel':max_agents,
+            'models':agent_models,'job_timeout_seconds':agent_timeout})
         self.save(task)
         return task
 
@@ -199,8 +223,9 @@ class TaskStore:
             raise ValueError("不支持的控制操作。")
         if task["status"] in TERMINAL:
             raise ValueError("任务已结束。")
-        if not self.busy() and pid_alive(task.get("child_pid")):
-            raise ValueError(f"worker 已退出但工具子进程 {task['child_pid']} 仍运行，请等待或在终端终止后再控制任务。")
+        pids=list(task.get('child_pids',{}).values())+[task.get('child_pid')]
+        if not self.busy() and any(pid_alive(pid) for pid in pids):
+            raise ValueError('worker 已退出但工具子进程仍运行，请等待或在终端终止后再控制任务：'+str([p for p in pids if pid_alive(p)]))
         owner = read_json(self.workspace.state / "task-worker.json", {})
         if self.busy() and owner.get("id") == task["id"]:
             write_json(self.directory(task["id"]) / "control.json", {"action": action})
@@ -229,6 +254,10 @@ class TaskStore:
                 extra_hours: float = 0, context_chars: int | None = None) -> dict:
         if self.busy():
             raise ValueError("当前工作区已有长期任务运行。")
+        for previous in self.list():
+            pids=list(previous.get('child_pids',{}).values())+[previous.get('child_pid')]
+            if any(pid_alive(pid) for pid in pids):
+                raise ValueError(f"任务 {previous['id']} 的工具子进程仍运行，不能重叠启动。")
         task = self.get(task_id)
         if task["status"] in TERMINAL:
             raise ValueError("任务已完成或取消，需新建目标。")
@@ -280,6 +309,12 @@ class TaskStore:
 
 
 def completion_gate(workspace: Workspace, task: dict) -> tuple[bool, str]:
+    if task.get('mode')=='orchestrate' and not task.get('delegations'):
+        return False,'编排任务尚无完成的外部分工。'
+    if any(batch['status']!='integrated' for batch in task.get('delegations',[])):
+        return False,'存在未完成的外部分工批次，不能仅凭最后一份报告完成。'
+    if task.get('target')=='workspace':
+        return workspace_gate(workspace.root,task)
     projects = list(dict.fromkeys(task.get("projects") or ([task["project"]] if task.get("project") else [])))
     if len(projects) > 1:
         outcomes = []
@@ -450,6 +485,13 @@ class TaskEngine:
                 context['last_observation'] = {key:previous['observation'][key] for key in ('id','sha256','source') if key in previous['observation']}
         context['experience_catalog'] = [{key:task.get(key) for key in ('id','status','updated_at')}
             | {'objective':task.get('objective','')[:200]} for task in self.store.list()[:6] if task['id']!=self.task['id']]
+        context['orchestration']={**self.task.get('orchestration',{'enabled':False}),
+            'available_agents':available_agents() if self.task.get('mode')=='orchestrate' else [],
+            'batches':self.task.get('delegations',[])[-4:],'checks':self.task.get('checks',[]),
+            'active_batch':self.task.get('active_delegation','')}
+        if self.task.get('mode')=='orchestrate':
+            paths=source_paths(self.workspace.root,imported_paths(self.task))
+            context['workspace_files']={'paths':paths[:500],'total':len(paths),'omitted':max(0,len(paths)-500)}
         return clean(context)
 
     async def run(self):
@@ -464,6 +506,13 @@ class TaskEngine:
             self.task.update(status="running", reason="持续执行中", pid=os.getpid())
             self.save()
             self.event("started")
+            if self.task.get('active_delegation') and self.task.get('mode')=='orchestrate':
+                resumed=await Orchestrator(self).run([],self.task['active_delegation'])
+                if self.task['steps']:
+                    step=self.task['steps'][-1]
+                    step.update(observation=resumed,status='interrupted' if self.stop_reason() else 'succeeded' if resumed['status']=='integrated' else 'failed')
+                    self.save_step(step)
+                self.save()
             while True:
                 stopped = self.stop_reason()
                 if stopped:
@@ -536,9 +585,10 @@ class TaskEngine:
                     selected = self.workspace.resolve(self.task["project"]) if self.task["project"] else None
                     settings = Settings(**self.task["settings"])
                     local_read = payload['action'] in READ_ACTIONS
+                    delegated = payload['action'] in {'delegate','workspace-verify'}
                     if not isinstance(payload.get('arguments'),dict):
                         raise ValueError('工具参数必须为对象。')
-                    plan = None if local_read else make_plan(self.workspace, settings, payload["action"], payload["arguments"], selected)
+                    plan = None if local_read or delegated else make_plan(self.workspace, settings, payload["action"], payload["arguments"], selected)
                     if plan and plan.project:
                         self.task["project"] = plan.project.relative_to(self.workspace.root).as_posix()
                         if self.task["project"] not in self.task.setdefault("projects", []):
@@ -559,7 +609,17 @@ class TaskEngine:
                     self.task["planner_failures"] = 0
                     self.tail = []
                     self.event("tool_started", iteration=iteration, action=payload["action"])
-                    if local_read:
+                    if delegated:
+                        if self.task.get('mode')!='orchestrate':
+                            raise ValueError('外部 agent 分工须选择 orchestrate 模式。')
+                        if payload['action']=='delegate':
+                            result=await Orchestrator(self).run(payload['arguments'].get('jobs',[]),payload['arguments'].get('batch_id',''))
+                            code=0 if result['status']=='integrated' else 1
+                        else:
+                            result=await verify_workspace(self)
+                            code=0 if result['status']=='pass' else 1
+                        step.update(observation=clean(result),exit_code=code,output_tail=self.tail)
+                    elif local_read:
                         result = execute_read(self.workspace, selected, payload['action'], payload['arguments'], task_id=self.task['id'])
                         if payload['action'] == 'skill' and result.get('content') and not result.get('resource'):
                             loaded = self.task.setdefault('loaded_skills', [])
@@ -623,12 +683,18 @@ def configure_parser(commands):
     start.add_argument("--project", default="")
     start.add_argument("--provider", choices=("api", "chat", "codex"))
     start.add_argument("--model")
-    start.add_argument("--target", choices=("simulation", "delivery"), default="delivery")
+    start.add_argument("--target", choices=("simulation", "delivery", "workspace"), default="delivery")
+    start.add_argument('--mode',choices=('engineer','orchestrate'),default='engineer')
+    start.add_argument('--agents',default='codex,claude,opencode')
+    start.add_argument('--max-agents',type=int,default=3)
+    start.add_argument('--agent-model',action='append',default=[],metavar='BACKEND=MODEL')
+    start.add_argument('--agent-timeout',type=int,default=3600)
+    start.add_argument('--checks-file',type=Path)
     start.add_argument("--max-steps", type=int, default=64)
     start.add_argument("--max-hours", type=float, default=24)
     start.add_argument("--max-failures", type=int, default=3)
     start.add_argument('--context-chars',type=int,default=96000)
-    for name in ("list", "status", "logs", "context", "pause", "resume", "cancel", "steer"):
+    for name in ("list", "status", "logs", "context", "agents", "pause", "resume", "cancel", "steer"):
         parser = sub.add_parser(name)
         parser.add_argument("--workspace", default=".")
         if name != "list":
@@ -653,8 +719,24 @@ def dispatch(args) -> int:
             settings.provider = args.provider
         if args.model:
             settings.model = args.model
-        task = store.create(args.objective, project=args.project or settings.project, target=args.target, settings=settings,
-                            max_steps=args.max_steps, max_hours=args.max_hours, max_failures=args.max_failures, context_chars=args.context_chars)
+        checks=None
+        if args.target=='workspace':
+            if args.checks_file:
+                checks=read_json(store.workspace.resolve(str(args.checks_file)))
+            elif (store.workspace.root/'tests').is_dir():
+                checks=[{'name':'unittest','argv':['python','-m','unittest','discover','-s','tests','-v']}]
+            else:
+                raise ValueError('workspace 目标请用 --checks-file 声明验收命令。')
+        models={}
+        for mapping in args.agent_model:
+            name,separator,model=mapping.partition('=')
+            if not separator or not model:
+                raise ValueError('--agent-model 用法：codex=模型名。')
+            models[name]=model
+        task = store.create(args.objective, project=args.project or (settings.project if args.target!='workspace' else ''), target=args.target, settings=settings,
+                            max_steps=args.max_steps, max_hours=args.max_hours, max_failures=args.max_failures, context_chars=args.context_chars,
+                            mode=args.mode,executors=args.agents.split(','),max_agents=args.max_agents,agent_models=models,
+                            agent_timeout=args.agent_timeout,checks=checks)
         result = store.launch(task["id"])
     elif name == "list":
         result = [{key: task.get(key) for key in ("id", "objective", "status", "reason", "project", "iterations", "elapsed_seconds")}
@@ -686,6 +768,8 @@ def dispatch(args) -> int:
         return 0
     elif name == 'context':
         result = store.get(args.task_id).get('context_budget',{'note':'该任务尚未发送规划请求。'})
+    elif name == 'agents':
+        result=store.get(args.task_id).get('delegations',[])
     else:
         result = store.get(args.task_id)
     print(json.dumps(clean(result), ensure_ascii=False, indent=2))
