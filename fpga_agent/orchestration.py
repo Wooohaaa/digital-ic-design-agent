@@ -89,7 +89,7 @@ def validate_jobs(jobs: list, executors: list[str], catalog: list[dict]) -> list
             executor = next((backend for backend in BACKENDS if backend in installed),'')
         if executor not in installed:
             raise ValueError(f'没有可用的执行者 {executor or "auto"}；已安装且启用：{sorted(installed)}')
-        item.update(executor=executor,status='pending',attempts=0)
+        item.update(executor=executor,status='pending',attempts=0,failure_count=0,launcher_recoveries=0)
         ids.add(name)
         result.append(item)
     if any(dep not in ids for job in result for dep in job['depends_on']):
@@ -219,8 +219,8 @@ class Orchestrator:
 
     def save(self,batch):
         write_json(self.engine.directory/'delegations'/batch['id']/'batch.json',batch)
-        summary={key:batch.get(key) for key in ('id','status','reason','changed_files','created_at')}
-        summary['jobs']=[{key:job.get(key) for key in ('id','role','executor','complexity','status','attempts','session_id','error')} for job in batch['jobs']]
+        summary={key:batch.get(key) for key in ('id','status','reason','changed_files','created_at','scheduling')}
+        summary['jobs']=[{key:job.get(key) for key in ('id','role','executor','complexity','status','attempts','failure_count','launcher_recoveries','session_id','error')} for job in batch['jobs']]
         summaries=self.engine.task.setdefault('delegations',[])
         self.engine.task['delegations']=[item for item in summaries if item['id']!=batch['id']]+[summary]
         self.engine.save()
@@ -290,12 +290,16 @@ class Orchestrator:
 
     def prompt(self,batch,job):
         dependencies=[{'id':item['id'],'report':item.get('report','')[-5000:]} for item in batch['jobs'] if item['id'] in job['depends_on']]
+        platform_advice=('Use terminal commands only. On Windows do not pipe patches into apply_patch: this launcher rejects piped UTF-8. '
+            'Use the native apply_patch tool when exposed, or .NET File.WriteAllText with UTF8Encoding(false) and literal here-strings. '
+            'Keep scratch/test-output files in ignored build/ directories. Host already validated the requested model and CLI; '
+            'do not repeat model setup or installation research for an unrelated coding subtask.\n') if os.name=='nt' else ''
         return ('You are one worker directed by IC Forge. Finish only your assigned subtask.\n'
             'Do not spawn other agents, push/publish, change credentials, reset branches, or edit .git/.fpga-agent.\n'
             'Keep trusted testbenches/reference contracts intact unless this task explicitly revises them.\n'
             'Implementation changes will be imported only from the declared file scopes. Analysis/review is read-only.\n'
             'Do not claim validation you did not run. Summarize changes, reasoning, evidence and remaining issues.\n'
-            'The host runs independent acceptance checks after integration.\n'+json.dumps({
+            'The host runs independent acceptance checks after integration.\n'+platform_advice+json.dumps({
                 'objective':self.engine.task['objective'],'steering':self.engine.task.get('steering',[]),
                 'job':{key:job[key] for key in ('id','role','prompt','files','complexity')},
                 'dependencies':dependencies,'previous_report':job.get('report','')[-5000:],
@@ -304,16 +308,21 @@ class Orchestrator:
     async def job(self,batch,job):
         record=self.engine.directory/'delegations'/batch['id']/'jobs'/job['id']
         record.mkdir(parents=True,exist_ok=True)
-        worktree=self.engine.workspace.state/'trees'/self.engine.task['id']/batch['id']/job['id']
+        tree_root=self.engine.workspace.state/'trees'/self.engine.task['id']/batch['id']
+        worktree=Path(job['worktree']) if job.get('worktree') else tree_root/'workers'/job['id']
+        if not worktree.resolve().is_relative_to(tree_root.resolve()) or worktree.resolve()==Path(batch['integration']).resolve():
+            raise ValueError('子任务工作树路径越界或与集成工作树冲突；需恢复独立工作树。')
+        worktree.parent.mkdir(parents=True,exist_ok=True)
         job['worktree']=str(worktree)
+        if job.get('failure_count',0)>=3:
+            job.update(status='failed',error='该分工已达到 3 次失败上限；暂停不计入失败。')
+            self.save(batch)
+            return
         if not worktree.exists():
             base=git(Path(batch['integration']),'rev-parse','HEAD').decode().strip()
             git(self.root,'worktree','add','--detach',str(worktree),base)
             job['base_commit']=base
-        elif job.get('attempts',0)>=3:
-            job.update(status='failed',error='该分工已达到 3 次尝试上限。')
-            self.save(batch)
-            return
+        self.engine.consume_steering()
         assignment=self.prompt(batch,job)
         (worktree/ASSIGNMENT).write_text(assignment,encoding='utf-8')
         job.update(status='running',attempts=job.get('attempts',0)+1,started_at=timestamp(),error=None)
@@ -340,6 +349,7 @@ class Orchestrator:
             if gateway:
                 gateway.close()
             job.update(status='failed',error=str(exc))
+            job['failure_count']=job.get('failure_count',0)+1
             self.runners.pop(job['id'],None)
             self.save(batch)
             return
@@ -361,13 +371,15 @@ class Orchestrator:
         started=time.monotonic()
         last_heartbeat=started
         running=asyncio.create_task(runner.run(argv,worktree,env,output,spawned,
-            stdin_text=assignment if job['executor']!='opencode' else None))
+            stdin_text=assignment if job['executor']!='opencode' else None,line_limit=1_000_000))
         timeout=False
+        launcher_recovery=False
         try:
             while not running.done():
                 await asyncio.wait({running},timeout=0.25)
                 timeout=time.monotonic()-started>=self.config.get('job_timeout_seconds',3600)
-                if self.engine.stop_reason() or timeout:
+                launcher_recovery=launcher_recovery or native.launcher_failures>=3
+                if self.engine.stop_reason() or timeout or launcher_recovery:
                     await runner.cancel()
                 if time.monotonic()-last_heartbeat>=1:
                     self.engine.heartbeat()
@@ -377,6 +389,12 @@ class Orchestrator:
             job.update(exit_code=code,report=report,usage=native.usage,finished_at=timestamp())
             if self.engine.stop_reason():
                 job.update(status='interrupted',error='任务暂停/取消或耗尽时间预算。')
+            elif launcher_recovery and job.get('launcher_recoveries',0)<2:
+                job.update(status='retryable',launcher_recoveries=job.get('launcher_recoveries',0)+1,
+                    error='Repeated Windows patch-launcher errors. Do not pipe patches or invoke the batch wrapper again. '
+                    'Use .NET File.WriteAllText with UTF8Encoding(false), literal here-strings, and the declared file scopes. '
+                    'Keep scratch files in ignored build/. Resume from existing source; do not repeat installation research.')
+                self.engine.event('agent_launcher_recovery',job_id=job['id'],attempt=job['attempts'])
             elif timeout or code or native.errors or not report.strip():
                 job.update(status='failed',error='执行超时' if timeout else '\n'.join(native.errors)[-3000:] or f'外部 agent exit={code} 或没有最终报告。')
             else:
@@ -389,6 +407,8 @@ class Orchestrator:
                 await running
                 job.update(status='interrupted',error='主管 worker 中断。')
             self.engine.task.setdefault('child_pids',{}).pop(job['id'],None)
+            if job['status']=='failed':
+                job['failure_count']=job.get('failure_count',0)+1
             self.runners.pop(job['id'],None)
             if gateway:
                 gateway.close()
@@ -463,6 +483,44 @@ class Orchestrator:
         batch.update(status='integrated',reason='分工变更已导入，等待宿主独立验收。')
         self.save(batch)
 
+    async def schedule(self,batch):
+        """Fill free slots from ready dependencies; a slow peer must not form a wave barrier."""
+        running={}
+        metrics=batch.setdefault('scheduling',{'policy':'dependency-ready','max_parallel_observed':0,'dispatch_order':[]})
+        failed=False
+        try:
+            while not self.engine.stop_reason():
+                complete={item['id'] for item in batch['jobs'] if item['status']=='completed' and item.get('merged')}
+                ready=[item for item in batch['jobs'] if item['status']=='pending' and item['id'] not in running and set(item['depends_on'])<=complete]
+                if not failed:
+                    for item in ready[:max(0,self.config['max_parallel']-len(running))]:
+                        future=asyncio.create_task(self.job(batch,item))
+                        running[item['id']]=(future,item)
+                        metrics['dispatch_order']=(metrics['dispatch_order']+[item['id']])[-64:]
+                        metrics['max_parallel_observed']=max(metrics['max_parallel_observed'],len(running))
+                        self.engine.event('agent_dispatched',batch_id=batch['id'],job_id=item['id'],executor=item['executor'],
+                            model=self.config.get('models',{}).get(item['executor'],'native'),active_slots=len(running),
+                            depends_on=item['depends_on'])
+                        self.save(batch)
+                if not running:
+                    break
+                done,_=await asyncio.wait([pair[0] for pair in running.values()],timeout=.25,return_when=asyncio.FIRST_COMPLETED)
+                for name,(future,item) in list(running.items()):
+                    if future not in done:
+                        continue
+                    await future
+                    del running[name]
+                    if item['status']=='retryable':
+                        item['status']='pending'
+                        self.save(batch)
+                    self.merge_wave(batch,[item])
+                    failed=failed or item['status']=='failed'
+                    self.engine.event('agent_finished',batch_id=batch['id'],job_id=name,status=item['status'],active_slots=len(running))
+                # After a failed node, retain already running independent work but launch no new work.
+        finally:
+            if running:
+                await asyncio.gather(*(runner.cancel() for runner in list(self.runners.values())))
+                await asyncio.gather(*(pair[0] for pair in running.values()),return_exceptions=True)
     async def run(self,jobs: list, batch_id: str = '') -> dict:
         batch_id=batch_id or self.engine.task.get('active_delegation','')
         batch=self.prepare(jobs,batch_id)
@@ -475,21 +533,13 @@ class Orchestrator:
                 self.integrate(batch)
             else:
                 for job in batch['jobs']:
-                    if job['status'] in {'running','interrupted','failed'}:
+                    job.setdefault('failure_count',job.get('attempts',0) if job['status']=='failed' else 0)
+                    if job['status'] in {'running','interrupted','failed','retryable'}:
                         job['status']='pending'
                 batch.update(status='running',reason='按依赖关系执行')
                 self.save(batch)
                 self.merge_wave(batch,batch['jobs'])
-                while not self.engine.stop_reason():
-                    complete={job['id'] for job in batch['jobs'] if job['status']=='completed' and job.get('merged')}
-                    ready=[job for job in batch['jobs'] if job['status']=='pending' and set(job['depends_on'])<=complete]
-                    if not ready:
-                        break
-                    wave=ready[:self.config['max_parallel']]
-                    await asyncio.gather(*(self.job(batch,job) for job in wave))
-                    self.merge_wave(batch,wave)
-                    if any(job['status']=='failed' for job in wave):
-                        break
+                await self.schedule(batch)
                 if self.engine.stop_reason():
                     batch.update(status='interrupted',reason='分工状态已保存，恢复时继续未完成节点。')
                 elif all(job['status']=='completed' and job.get('merged') for job in batch['jobs']):
@@ -511,5 +561,6 @@ class Orchestrator:
 
     def report(self,batch):
         return {'batch_id':batch['id'],'status':batch['status'],'reason':batch['reason'],'changed_files':batch.get('changed_files',[]),
+            'scheduling':batch.get('scheduling',{}),
             'jobs':[{key:job.get(key) for key in ('id','executor','role','status','depends_on','changed_files','session_id','error','usage')}
                     | {'report':job.get('report','')[-3000:]} for job in batch['jobs']]}

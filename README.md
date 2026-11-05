@@ -51,6 +51,21 @@ icforge task logs
 
 可用 `/agent-model opencode opencode/deepseek-v4.1-flash-free` 给执行者选择免费模型，`/agent-model claude x-deepseek-v4.1-flash` 给 Claude Code 选择已配置网关的 DeepSeek。Windows 新版 Claude Code 原生程序识别与可选 Messages 网关兼容层见 [多 CLI 联动](docs/backend-linkage.md)。
 
+## HX1P35A HDMI 3D 立方体
+
+`benchmarks/hdmi_cube` 是一次真实的多 Codex gpt-6-luna 端到端试验：6 个互不重叠的实现分工曾同时运行，之后进行顶层集成、只读审查和宿主独立验收。它在 HX1P35A 上生成 640×480 DVI/TMDS 视频，以双轴旋转、定点投影和双缓冲绘制线框立方体。
+
+![最终 RTL 帧缓冲的三个旋转角仿真画面；这是仿真预览，不是开发板照片](benchmarks/hdmi_cube/reports/rtl-preview.png)
+
+最终独立验收通过：时序、TMDS、256 个姿态几何、双缓冲、串行器和顶层视频流全部通过；安路 TD full 产生 PH1P35MDG324 bitstream，setup WNS +7.286 ns、hold WNS +0.073 ns、TNS 均为 0，STA 覆盖率 99.88%，使用 38/108 ERAM。首轮综合发现旧 PLL 原语不支持此器件；执行者根据本机安路资料改用 `PH1P_PHY_PLL_V2` 后复验通过。
+
+```powershell
+python benchmarks/hdmi_cube/verification/acceptance.py
+python -m fpga_agent package benchmarks/hdmi_cube
+```
+
+仿真与 FPGA 实现通过不等于实板视觉验收。本轮尚未下载板卡，HDMI 显示器需连接后再检查实际输出。任务记录、方法和完整限制见 [HDMI 立方体工程试验](docs/hdmi-cube-flow.md)。
+
 ## 模型与验证
 
 TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比。额外三轮板上生成也逐 token 通过独立参考校验（每轮 16 个新 token，以下为达到长度上限时的原始片段）：
@@ -63,7 +78,7 @@ TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生�
 
 - `exchange`：本轮临时模型后端。当前会话的 Luna 子代理生成实际响应，再通过带模型标识的文件导入 agent；请求、响应、指纹和修复记录都保留。
 - `api`：OpenAI Responses API，默认模型 `gpt-6-luna`，需要 API Key；`chat` 为显式兼容接口。
-- `codex`：可调用独立 Codex CLI。本机 ChatGPT 账户对 `gpt-6-luna` 返回 model_not_found，本轮采用会话内 Luna 与 exchange，没有自动改用其它模型。
+- `codex`：可调用独立 Codex CLI。本轮六个并行执行者均显式使用 `gpt-6-luna`，并保留本机 Codex provider 与认证配置；没有切换到 Gemini 或其他模型。
 - CPU 生成模型只负责候选 RTL。Python 参考模型、testbench、定向/随机程序和验收规则由验证侧持有，模型不能通过修改 testbench 降低门槛。
 
 普通模块仍可用 `design` 生成 RTL 和自检 testbench；CPU profile 通过 `cpu-design` 使用独立参考验证。后续 FIFO、算术、总线和存储控制等能力可以沿用 provider、验证 profile、TD 和证据门禁。
@@ -117,7 +132,7 @@ python -m fpga_agent flow my-design
 
 工程严谨性增强：新增 `/lint`、`/review`，按规格、RTL、验证、实现、集成职责生成可追溯检查与下一步动作。普通 RTL 修复冻结已接受的验证器；新工程按需求 ID 检查运行结果；仿真指纹覆盖规格、配置、include 和 ROM 数据；交付包附工程审查与逐文件 SHA-256。缺少工具、人工审阅或未执行分析会明确保留。使用与迁移说明见 [工程审查流程](docs/engineering-workflow.md)。
 
-当前版本为 [v0.4.3](https://github.com/Wooohaaa/digital-ic-design-agent/releases/tag/v0.4.3)：提供九套可切换终端主题和四种字符字标，支持通过 `/theme`、`/logo` 即时切换并按工作区保存。界面保持纯黑背景，只切换文字、字标、光标和线框颜色；包含参考图中的 Rose/Citrine 配色，以及 Nord、Tokyo Night、Catppuccin 等现代色板。此前版本修复部分 Cloudflare 前置兼容接口的 403 / 1010 问题。发布包包含 TUI、安装 wheel、四份工程交付包和验证记录。工程门禁实测结果及未关闭检查见 [工程流程验收](docs/engineering-validation.md)。历史版本保留用于复现。
+当前源码版本为 0.6.0；此前公开发布的 [v0.4.3](https://github.com/Wooohaaa/digital-ic-design-agent/releases/tag/v0.4.3) 提供九套可切换终端主题和四种字符字标，支持通过 `/theme`、`/logo` 即时切换并按工作区保存。界面保持纯黑背景，只切换文字、字标、光标和线框颜色；包含参考图中的 Rose/Citrine 配色，以及 Nord、Tokyo Night、Catppuccin 等现代色板。工程门禁实测结果及未关闭检查见 [工程流程验收](docs/engineering-validation.md)。历史版本保留用于复现。
 
 归档内的三份工程分别在 `benchmarks/rv32_*/deliverables/`，包含 RTL、独立 testbench、约束、可移动 TD `.al` 工程、bitstream、时序/资源报告和验证记录。综合测试封装含片上 ROM/RAM 和提交签名序列化输出。
 

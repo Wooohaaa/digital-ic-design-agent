@@ -104,6 +104,9 @@ def simulation_valid(project: Path,manifest: dict,report: dict) -> tuple[bool,st
     if report.get('evidence_version') != EVIDENCE_VERSION:return False,'simulation evidence schema changed; rerun verification'
     if report.get('verification_inputs') != simulation_input_hashes(project,manifest):return False,'verification configuration, specification or dependencies changed'
     if type(report.get('returncode')) is not int or report['returncode'] != 0:return False,'simulator exit status is not successful'
+    if manifest.get('verification',{}).get('kind')=='hdmi-cube':
+        from .video import evidence_valid
+        return evidence_valid(project,manifest,report)
     if manifest.get('verification',{}).get('kind')=='tinystories-fp32':
         from .tinyllm import evidence_valid
         return evidence_valid(project,manifest,report)

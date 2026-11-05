@@ -211,10 +211,11 @@ def _codex_request(
             "--output-last-message",
             str(last_message),
         ]
+        # Model selection must not reset the operator's provider/authentication route.
+        # Workers already retain native CLI config; the supervisor must use the same route.
         if model != 'native':
-            args += ['--ignore-user-config','--model',model]
-        else:
-            args += ['-c','approval_policy="never"']
+            args += ['--model',model]
+        args += ['-c','approval_policy="never"']
         if schema is not None:
             schema_file = tmp / "schema.json"
             schema_file.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")

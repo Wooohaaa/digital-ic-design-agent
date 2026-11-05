@@ -28,17 +28,21 @@ data=json.loads(sys.stdin.read().splitlines()[-1]); j=data['job']
 print(json.dumps({'type':'thread.started','thread_id':'fixture-'+j['id']}),flush=True)
 print(json.dumps({'type':'fixture.start','time':time.time()}),flush=True)
 if j['prompt']=='WAIT' and not sys.argv[1]: time.sleep(30)
+elif j['prompt']=='SLOW': time.sleep(2)
 else: time.sleep(0.3)
 if j['role']=='review':
     assert Path('a.py').exists() and Path('b.py').exists(), 'review must see dependencies'
 elif j['role']=='implement':
     p=Path('outside.py') if j['prompt']=='OUTSIDE' else Path(j['files'][0])
     p.parent.mkdir(parents=True,exist_ok=True)
-    p.write_text('value = 1' if j['prompt'] in ('WAIT','LOGICAL_ERROR','OUTSIDE') else j['prompt'])
+    p.write_text('value = 1' if j['prompt'] in ('WAIT','LOGICAL_ERROR','OUTSIDE','SLOW') else j['prompt'])
 print(json.dumps({'type':'item.completed','item':{'type':'agent_message','text':'Finished scoped job '+j['id']}}),flush=True)
 if j['prompt']=='LOGICAL_ERROR': print(json.dumps({'type':'error','message':'logical failure'}),flush=True)
 print(json.dumps({'type':'fixture.end','time':time.time()}),flush=True)
 print(json.dumps({'type':'turn.completed','usage':{'input_tokens':10,'output_tokens':5}}),flush=True)
+if j['prompt']=='PATCH_LOOP' and not sys.argv[1]:
+    for i in range(3):print(json.dumps({'type':'item.completed','item':{'type':'command_execution','command':'apply_patch','exit_code':1,'aggregated_output':'requires a UTF-8 PATCH argument'}}),flush=True)
+    time.sleep(30)
 '''
 
 
@@ -62,6 +66,16 @@ class ScriptedOrchestrationEngine(TrackingEngine):
 
 
 class PlanAndAdapterTests(unittest.TestCase):
+    def test_repeated_patch_launcher_errors_are_classified_and_success_clears_them(self):
+        events=Events('codex')
+        for _ in range(3):
+            events.accept(json.dumps({'type':'item.completed','item':{'type':'command_execution','command':'apply_patch',
+                'exit_code':1,'aggregated_output':"Invalid patch: The last line of the patch must be '*** End Patch'"}}))
+        self.assertEqual(events.launcher_failures,3)
+        events.accept(json.dumps({'type':'item.completed','item':{'type':'command_execution','command':'[IO.File]::WriteAllText',
+            'exit_code':0,'aggregated_output':''}}))
+        self.assertEqual(events.launcher_failures,0)
+
     @unittest.skipUnless(os.name=='nt','Windows npm shims')
     def test_claude_npm_native_binary_and_legacy_js_are_detected_without_shell(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -142,6 +156,7 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.catalog_patch.stop); self.addCleanup(self.command_patch.stop)
 
     async def test_parallel_workers_then_dependent_review_and_host_acceptance(self):
+        self.store.steer(self.engine.task['id'],'Preserve the fixed operator acceptance contract.')
         (self.root/'core.py').write_text('user_change = True\n')
         private=self.root/'llm/private.txt'
         private.parent.mkdir(); private.write_text('user unrelated data')
@@ -154,6 +169,10 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         batch=read_json(self.engine.directory/'delegations'/result['batch_id']/'batch.json')
         self.assertFalse((Path(batch['integration'])/'llm').exists())
         self.assertTrue(all(row['session_id'] for row in result['jobs']))
+        self.assertEqual(len(self.engine.task['steering']),1)
+        for name in ('a','b','review'):
+            assignment=self.engine.directory/'delegations'/result['batch_id']/'jobs'/name/'attempt-1/assignment.txt'
+            self.assertIn('Preserve the fixed operator acceptance contract.',assignment.read_text(encoding='utf-8'))
         checked=await verify_workspace(self.engine)
         self.assertEqual(checked['status'],'pass')
         self.assertTrue(completion_gate(self.store.workspace,self.engine.task)[0])
@@ -166,6 +185,26 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['status'],'integrated',result)
         self.assertEqual(self.engine.max_children,1)
         self.assertEqual((self.root/'a.py').read_text(),'value = 2')
+
+    async def test_integration_job_name_cannot_alias_shared_integration_worktree(self):
+        result=await Orchestrator(self.engine).run([job('integration',files=['a.py'])])
+        self.assertEqual(result['status'],'integrated',result)
+        batch=read_json(self.engine.directory/'delegations'/result['batch_id']/'batch.json')
+        self.assertNotEqual(batch['jobs'][0]['worktree'],batch['integration'])
+        self.assertEqual(Path(batch['jobs'][0]['worktree']).parent.name,'workers')
+
+    async def test_ready_dependency_uses_free_slot_before_slow_independent_peer_finishes(self):
+        result=await Orchestrator(self.engine).run([job('a'),job('b',prompt='SLOW'),job('c',deps=['a'])])
+        self.assertEqual(result['status'],'integrated',result)
+        events={}
+        for name in ('b','c'):
+            path=self.engine.directory/'delegations'/result['batch_id']/'jobs'/name/'attempt-1/events.jsonl'
+            events[name]=[json.loads(line) for line in path.read_text().splitlines()]
+        c_start=next(e['time'] for e in events['c'] if e['type']=='fixture.start')
+        b_end=next(e['time'] for e in events['b'] if e['type']=='fixture.end')
+        self.assertLess(c_start,b_end)
+        self.assertEqual(result['scheduling']['max_parallel_observed'],2)
+        self.assertEqual(result['scheduling']['dispatch_order'],['a','b','c'])
 
     async def test_out_of_scope_patch_and_zero_exit_logical_error_are_not_imported(self):
         result=await Orchestrator(self.engine).run([job('a',prompt='OUTSIDE')])
@@ -242,6 +281,26 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['status'],'failed')
         self.assertEqual(result['jobs'][0]['status'],'failed')
         self.assertEqual(self.engine.task['child_pids'],{})
+
+    async def test_known_launcher_loop_recovers_with_same_native_session_and_scope(self):
+        self.engine.task['orchestration']['job_timeout_seconds']=10
+        result=await Orchestrator(self.engine).run([job('a',prompt='PATCH_LOOP')])
+        self.assertEqual(result['status'],'integrated',result)
+        batch=read_json(self.engine.directory/'delegations'/result['batch_id']/'batch.json')
+        self.assertEqual(batch['jobs'][0]['attempts'],2)
+        self.assertEqual(batch['jobs'][0]['launcher_recoveries'],1)
+        self.assertEqual(batch['jobs'][0]['failure_count'],0)
+
+    async def test_multiple_operator_pauses_do_not_exhaust_failure_budget(self):
+        orchestrator=Orchestrator(self.engine)
+        batch=orchestrator.prepare([job('a')],'')
+        batch['jobs'][0].update(status='interrupted',attempts=4)
+        orchestrator.save(batch)
+        result=await orchestrator.run([],batch['id'])
+        self.assertEqual(result['status'],'integrated',result)
+        stored=read_json(self.engine.directory/'delegations'/batch['id']/'batch.json')
+        self.assertEqual(stored['jobs'][0]['failure_count'],0)
+        self.assertEqual(stored['jobs'][0]['attempts'],5)
 
     async def test_new_untracked_directory_is_included_in_gate_and_next_batch(self):
         result=await Orchestrator(self.engine).run([job('new',files=['newpkg/module.py'])])

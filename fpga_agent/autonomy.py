@@ -451,16 +451,19 @@ class TaskEngine:
             self.task.pop("child_pid", None)
             self.save()
 
-    def context(self):
-        selected = self.workspace.resolve(self.task["project"]) if self.task["project"] else None
-        context = self.workspace.context(selected, self.task["objective"])
-        # Consume messages at decision boundaries. Saved state precedes inbox deletion.
+    def consume_steering(self):
+        # Also called before dispatching waiting children. Persist before deleting the inbox note.
         for path in sorted((self.directory / "inbox").glob("*.json")):
             note = read_json(path, {})
             if path.name not in {n.get("id") for n in self.task["steering"]} and isinstance(note.get("message"), str):
                 self.task["steering"].append({"id": path.name, **note})
                 self.save()
             path.unlink(missing_ok=True)
+
+    def context(self):
+        self.consume_steering()
+        selected = self.workspace.resolve(self.task["project"]) if self.task["project"] else None
+        context = self.workspace.context(selected, self.task["objective"])
         history = []
         for step in self.task["steps"][-8:]:
             compact = {k: step[k] for k in ("iteration", "status", "exit_code", "reason", "log_truncated") if k in step}

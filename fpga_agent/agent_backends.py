@@ -98,6 +98,7 @@ class Events:
         self.text: list[str] = []
         self.errors: list[str] = []
         self.usage: dict[str,int] = {}
+        self.launcher_failures = 0
 
     def accept(self,line: str):
         try:
@@ -111,6 +112,14 @@ class Events:
             self.session_id = candidate
         kind = event.get('type','')
         item = event.get('item',{})
+        if kind=='item.completed' and isinstance(item,dict) and item.get('type')=='command_execution':
+            command=str(item.get('command',''));output=str(item.get('aggregated_output',''))
+            patch_command='apply_patch' in command or 'codex-run-as-apply-patch' in command
+            if patch_command and item.get('exit_code') not in (None,0) and any(marker in output.lower() for marker in (
+                'requires a utf-8 patch argument','last line of the patch must be','command line is too long')):
+                self.launcher_failures+=1
+            elif item.get('exit_code')==0 and ('Success. Updated the following files' in output or 'WriteAllText' in command):
+                self.launcher_failures=0
         if kind == 'item.completed' and isinstance(item,dict) and item.get('type') == 'agent_message':
             self.text.append(str(item.get('text','')))
         if kind == 'result':

@@ -366,7 +366,10 @@ class ProcessRunner:
         self.cancelled = False
 
     async def run(self, argv: list[str], cwd: Path, env: dict[str, str], on_output: Callable[[str], None],
-                  on_spawn: Callable[[int], None] | None = None, *, stdin_text: str | None = None) -> int:
+                  on_spawn: Callable[[int], None] | None = None, *, stdin_text: str | None = None,
+                  line_limit: int = 16384) -> int:
+        if not 4096<=line_limit<=4_000_000:
+            raise ValueError('line_limit must be 4,096..4,000,000 characters')
         if self.cancelled:
             return 130
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
@@ -401,7 +404,7 @@ class ProcessRunner:
                     on_output(redact(line.rstrip("\r"), env))
                 # Preserve a tail so an incomplete credential/token cannot straddle
                 # a cut when a tool emits a very long line without newlines.
-                if len(pending) > 16384:
+                if len(pending) > line_limit:
                     pending = redact(pending, env)
                     on_output(pending[:-1024])
                     pending = pending[-1024:]

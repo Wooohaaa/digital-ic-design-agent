@@ -110,7 +110,7 @@ def do_design(project: Path, brief: str, repair_rounds: int, provider: str = 'ex
     return 1
 
 
-def do_td(project: Path, stage: str, td_root: str | None) -> int:
+def do_td(project: Path, stage: str, td_root: str | None, *, update_manifest: bool = True) -> int:
     manifest = load_manifest(project)
     if stage == "full" and not manifest.get("td_full_allowed", True):
         ports = ", ".join(manifest.get("unmapped_top_ports", []))
@@ -187,10 +187,12 @@ def do_td(project: Path, stage: str, td_root: str | None) -> int:
     print(output, end="")
     if code == 0:
         manifest["td_status"] = stage
-        save_manifest(project, manifest)
+        if update_manifest:
+            save_manifest(project, manifest)
         return 0
     manifest["td_status"] = "fail"
-    save_manifest(project, manifest)
+    if update_manifest:
+        save_manifest(project, manifest)
     return code or 1
 
 
@@ -270,6 +272,10 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
         for name in hdl_input_hashes(project,manifest['rtl_sources']+manifest['testbench_sources'],allow_dynamic_memory=manifest.get('verification',{}).get('kind')=='riscv-retire'):
             if name not in archive.namelist():
                 archive.write(project/name,name)
+        # A declared checker/specification is part of delivery, even outside the conventional folders.
+        for name in [key for key in verified_inputs if not key.startswith('@')]+['README.md']:
+            if name not in archive.namelist() and (project/name).is_file():
+                archive.write(project/name,name)
     # Read only after closing the writer: Python 3.11 on Windows can normalize
     # ZipInfo paths differently while reading entries from an open write handle.
     with zipfile.ZipFile(pending,'r') as archive:
@@ -293,7 +299,9 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             if not valid:
                 raise ValueError('Delivery implementation evidence rejected: '+reason)
         with zipfile.ZipFile(pending) as archive:
-            for name,expected in hdl_input_hashes(project,manifest['rtl_sources']+manifest['testbench_sources'],allow_dynamic_memory=manifest.get('verification',{}).get('kind')=='riscv-retire').items():
+            for name,expected in verified_inputs.items():
+                if name.startswith('@'):
+                    continue
                 if hashlib.sha256(archive.read(name)).hexdigest() != expected:
                     raise ValueError(f'Archived verification input differs: {name}')
             for name,expected in td_result.get('bitstream_hashes',{}).items():

@@ -1,0 +1,65 @@
+{
+  "project": "hdmi_cube",
+  "target": "Anlogic PH1P35MDG324",
+  "board": "hx1p35a",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "hdmi_cube_top",
+  "testbench_top": "tb_video_timing",
+  "rtl_sources": [
+    "rtl/video_timing.v",
+    "rtl/tmds_encoder.v",
+    "rtl/cube_vertices.v",
+    "rtl/cube_framebuffer.v",
+    "rtl/hdmi_phy.v",
+    "rtl/hdmi_cube_top.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_video_timing.sv",
+    "tb/tb_tmds_encoder.sv",
+    "tb/tb_cube_vertices.sv",
+    "tb/tb_cube_framebuffer.sv",
+    "tb/tb_hdmi_phy.sv"
+  ],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "board_io": {
+    "I_sys_clk": "I_sys_clk",
+    "O_hdmi_data_p[0]": "O_hdmi_data_p[0]",
+    "O_hdmi_data_n[0]": "O_hdmi_data_n[0]",
+    "O_hdmi_data_p[1]": "O_hdmi_data_p[1]",
+    "O_hdmi_data_n[1]": "O_hdmi_data_n[1]",
+    "O_hdmi_data_p[2]": "O_hdmi_data_p[2]",
+    "O_hdmi_data_n[2]": "O_hdmi_data_n[2]",
+    "O_hdmi_clk_p": "O_hdmi_clk_p",
+    "O_hdmi_clk_n": "O_hdmi_clk_n",
+    "O_hdmi_hpd": "O_hdmi_hpd"
+  },
+  "top_ports": {
+    "I_sys_clk": "input",
+    "O_hdmi_data_p": "output",
+    "O_hdmi_data_n": "output",
+    "O_hdmi_clk_p": "output",
+    "O_hdmi_clk_n": "output",
+    "O_hdmi_hpd": "output"
+  },
+  "unmapped_top_ports": [],
+  "td_full_allowed": true,
+  "checks": [
+    "800x525 video timing and blanking",
+    "TMDS control symbols and data running disparity",
+    "All-angle 3-D vertex transform",
+    "Double-buffered 12-edge framebuffer rendering",
+    "Three distinct RTL-rendered frame captures",
+    "DVI-compatible differential serialization",
+    "Native TD full implementation with ERAM inference and setup/hold checks"
+  ],
+  "verification": {
+    "kind": "hdmi-cube",
+    "additional_inputs": [
+      "SPEC.md",
+      "board/hx1p35a.json",
+      "verification/acceptance.py"
+    ]
+  }
+}

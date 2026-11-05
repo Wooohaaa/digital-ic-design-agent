@@ -88,6 +88,15 @@ class WorkspaceTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_json_event_is_preserved_above_normal_terminal_line_limit(self):
+        import json
+        lines=[];runner=ProcessRunner()
+        code=await runner.run([sys.executable,'-c',"import json; print(json.dumps({'type':'event','payload':'x'*60000}))"],
+                              Path.cwd(),dict(os.environ),lines.append,line_limit=1_000_000)
+        self.assertEqual(code,0)
+        self.assertEqual(len(lines),1)
+        self.assertEqual(len(json.loads(lines[0])['payload']),60000)
+
     async def test_large_unicode_stdin_is_literal_and_does_not_deadlock_stdout(self):
         runner=ProcessRunner()
         payload=('你好 $HOME $(whoami) `echo unsafe` ; & |\n' * 10000)

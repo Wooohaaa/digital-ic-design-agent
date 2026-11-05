@@ -1,0 +1,10 @@
+set_pin_assignment { I_sys_clk } { LOCATION = C4; IOSTANDARD = LVCMOS33; PULLTYPE = PULLUP; }
+set_pin_assignment { O_hdmi_data_p[0] } { LOCATION = G16; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_data_n[0] } { LOCATION = H16; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_data_p[1] } { LOCATION = F17; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_data_n[1] } { LOCATION = E18; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_data_p[2] } { LOCATION = H14; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_data_n[2] } { LOCATION = H13; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_clk_p } { LOCATION = C17; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_clk_n } { LOCATION = D18; IOSTANDARD = TMDS33; }
+set_pin_assignment { O_hdmi_hpd } { LOCATION = B17; IOSTANDARD = LVCMOS33; DRIVESTRENGTH = 8; }
