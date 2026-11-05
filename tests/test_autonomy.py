@@ -19,7 +19,7 @@ from fpga_agent.terminal import Settings, TaskPlan, Workspace, read_json, write_
 
 
 def decision(action="init", kind="execute", **arguments):
-    return {"decision": kind, "message": "下一步检查真实证据", "plan": ["实现", "验证", "交付"], "memory": "保留验证要求",
+    return {"decision": kind, "message": "��һ�������ʵ֤��", "plan": ["ʵ��", "��֤", "����"], "memory": "������֤Ҫ��",
             "action": action, "arguments": {"project": "demo", "brief": "", "architecture": "multi",
                                               "full": False, "simulation_only": False, **arguments}}
 
@@ -50,7 +50,7 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         self.store = TaskStore(self.workspace)
 
     def create(self, **kwargs):
-        return self.store.create("完成 demo 的设计与验证", **kwargs)
+        return self.store.create("��� demo ���������֤", **kwargs)
 
     async def test_one_worker_lease_and_path_boundaries(self):
         lease = Lease(self.store.lock)
@@ -65,6 +65,26 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
             self.store.directory("../escape")
         with self.assertRaises(ValueError):
             self.create(project="../escape")
+
+    @unittest.skipUnless(os.name == "nt", "msvcrt unlock timing is Windows-specific")
+    def test_busy_retries_transient_kernel_unlock_after_process_exit(self):
+        class ReleasedLease:
+            def close(self):
+                pass
+
+        with patch("fpga_agent.autonomy.Lease", side_effect=[ValueError("still releasing"), ReleasedLease()]), patch(
+            "fpga_agent.autonomy.time.sleep"
+        ) as sleep:
+            self.assertFalse(self.store.busy())
+        sleep.assert_called_once()
+
+    def test_busy_trusts_a_live_persisted_worker_owner_without_relocking(self):
+        task = self.create()
+        task.update(status="running", pid=os.getpid())
+        self.store.save(task)
+        write_json(self.workspace.state / "task-worker.json", {"id": task["id"], "pid": os.getpid()})
+        with patch("fpga_agent.autonomy.Lease", side_effect=AssertionError("must not reacquire worker lease")):
+            self.assertTrue(self.store.busy())
 
     async def test_kernel_lease_releases_after_worker_is_forcibly_killed(self):
         script = "from pathlib import Path;from fpga_agent.autonomy import Lease;import sys,time;l=Lease(Path(sys.argv[1]));print('locked',flush=True);time.sleep(30)"
@@ -83,7 +103,7 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         engine = ScriptedEngine(self.store, task["id"], [decision("none", "complete")])
         result = await engine.run()
         self.assertEqual(result["status"], "blocked")
-        self.assertIn("验收", result["reason"])
+        self.assertIn("����", result["reason"])
         self.assertEqual(engine.tool_calls, 0)
 
     async def test_multi_project_task_cannot_finish_when_only_last_project_passes(self):
@@ -111,13 +131,13 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         task = self.create(max_steps=1)
         result = await ScriptedEngine(self.store, task["id"], [decision()]).run()
         self.assertEqual(result["status"], "limited")
-        with self.assertRaisesRegex(ValueError, "预算"):
+        with self.assertRaisesRegex(ValueError, "Ԥ��"):
             self.store.launch(task["id"])
         self.assertEqual(self.store.get(task["id"])["iterations"], 1)
 
     async def test_long_history_is_archived_and_checkpoint_stays_bounded(self):
         task = self.create(max_steps=20)
-        choices = [decision(brief=f'阶段 {i}') for i in range(20)]
+        choices = [decision(brief=f'�׶� {i}') for i in range(20)]
         result = await ScriptedEngine(self.store, task['id'], choices).run()
         self.assertEqual(result['status'], 'limited')
         self.assertEqual(result['iterations'], 20)
@@ -125,15 +145,15 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         directory = self.store.directory(task['id'])
         self.assertEqual(len(list(directory.glob('step-*/result.json'))), 20)
         self.assertEqual(read_json(directory/'step-0001/result.json')['iteration'],1)
-        self.assertEqual(result['memory'], '保留验证要求')
+        self.assertEqual(result['memory'], '������֤Ҫ��')
 
     async def test_context_overflow_blocks_before_model_call_and_preserves_original_goal(self):
-        task=self.store.create('要求'*10000,context_chars=16000)
+        task=self.store.create('Ҫ��'*10000,context_chars=16000)
         engine=ScriptedEngine(self.store,task['id'],[])
         result=await engine.run()
         self.assertEqual(result['status'],'blocked')
         self.assertEqual(result['iterations'],0)
-        self.assertEqual(result['objective'],'要求'*10000)
+        self.assertEqual(result['objective'],'Ҫ��'*10000)
         self.assertIn('context-chars',result['reason'])
 
     async def test_read_tools_load_and_unload_skills_without_spawning_a_tool_process(self):
@@ -224,14 +244,14 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(paused["status"], "paused")
         self.assertFalse(pid_alive(child))
         self.assertEqual(paused["steps"][-1]["status"], "interrupted")
-        self.store.steer(task["id"], "先检查时钟约束")
+        self.store.steer(task["id"], "�ȼ��ʱ��Լ��")
         directory = self.store.directory(task["id"])
         (directory / "control.json").unlink()
         resumed = await ScriptedEngine(self.store, task["id"], [decision("none", "blocked")]).run()
         self.assertEqual(resumed["iterations"], 2)
         request = read_json(directory / "step-0002/request.json")
         self.assertEqual(request["context"]["history"][0]["status"], "interrupted")
-        self.assertEqual(request["context"]["steering"][0]["message"], "先检查时钟约束")
+        self.assertEqual(request["context"]["steering"][0]["message"], "�ȼ��ʱ��Լ��")
         self.assertEqual(list((directory / "inbox").glob("*.json")), [])
 
     async def test_dead_worker_cannot_overlap_a_still_running_tool(self):
@@ -239,16 +259,16 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
         task.update(status="running", child_pid=os.getpid())
         self.store.save(task)
         self.assertEqual(self.store.get(task["id"])["status"], "interrupted")
-        with self.assertRaisesRegex(ValueError, "仍运行"):
+        with self.assertRaisesRegex(ValueError, "������"):
             self.store.launch(task["id"])
-        with self.assertRaisesRegex(ValueError, "子进程"):
+        with self.assertRaisesRegex(ValueError, "�ӽ���"):
             self.store.control(task["id"], "cancel")
 
     async def test_task_logs_and_context_redact_inherited_credentials(self):
         secret = "test-secret-for-persistent-task"
         with patch.dict(os.environ, {"OPENAI_API_KEY": secret}):
-            task = self.store.create("检查 " + secret)
-            self.store.steer(task["id"], "附加 " + secret)
+            task = self.store.create("��� " + secret)
+            self.store.steer(task["id"], "���� " + secret)
             await ScriptedEngine(self.store, task["id"], [decision("none", "blocked")]).run()
         for path in self.workspace.state.rglob("*.json*"):
             self.assertNotIn(secret, path.read_text(encoding="utf-8"))
@@ -316,10 +336,13 @@ class DetachedTaskIntegrationTests(unittest.TestCase):
             secret = "offline-fixture-no-real-credential"
             env = dict(os.environ, OPENAI_API_KEY=secret, PYTHONIOENCODING="utf-8")
             parent = subprocess.run([sys.executable, '-m', 'fpga_agent', 'task', 'start',
-                '创建 demo 并通过真实仿真验收', '--workspace', temp, '--target', 'simulation'],
+                '���� demo ��ͨ����ʵ��������', '--workspace', temp, '--target', 'simulation'],
                 env=env, capture_output=True, text=True, encoding='utf-8', timeout=10)
-            self.assertEqual(parent.returncode, 0, parent.stderr)
             task = store.get()
+            worker_log_path = store.directory(task["id"]) / "worker.log"
+            worker_log = worker_log_path.read_text(encoding="utf-8", errors="replace") if worker_log_path.exists() else "<missing>"
+            self.assertEqual(parent.returncode, 0,
+                f"worker launcher exited {parent.returncode}\nstdout:\n{parent.stdout}\nstderr:\n{parent.stderr}\nworker.log:\n{worker_log}")
             try:
                 deadline = time.monotonic() + 25
                 while time.monotonic() < deadline:
@@ -327,7 +350,12 @@ class DetachedTaskIntegrationTests(unittest.TestCase):
                     if result["status"] not in {"queued", "running"}:
                         break
                     time.sleep(0.05)
-                self.assertEqual(result["status"], "completed", result)
+                worker_log_path = store.directory(task["id"]) / "worker.log"
+                worker_log = worker_log_path.read_text(encoding="utf-8", errors="replace") if worker_log_path.exists() else "<missing>"
+                owner = read_json(store.workspace.state / "task-worker.json", {})
+                details = {"task": result, "worker_alive": pid_alive(result.get("pid")),
+                    "lease_busy": store.busy(), "owner": owner, "worker_log": worker_log}
+                self.assertEqual(result["status"], "completed", details)
                 self.assertEqual(len(calls), 7)
                 self.assertEqual(result["iterations"], 7)
                 self.assertTrue(completion_gate(store.workspace, result)[0])
