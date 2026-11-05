@@ -56,6 +56,14 @@ class WorkspaceTests(unittest.TestCase):
     def test_redaction(self):
         self.assertEqual(redact("key=test-password", {"OPENAI_API_KEY": "test-password"}), "key=[redacted]")
 
+    def test_video_capture_never_infers_programming_from_full_flag(self):
+        project=self.workspace.root/'video';project.mkdir();(project/'project.json').write_text('{}')
+        capture=make_plan(self.workspace,Settings(),'video-hardware',{'project':'video','full':True},None)
+        self.assertNotIn('--program',capture.commands[0])
+        explicit=make_plan(self.workspace,Settings(),'video-hardware',{'project':'video','program':True,'device':'Camera with spaces'},None)
+        self.assertIn('--program',explicit.commands[0])
+        self.assertEqual(explicit.commands[0][-1],'Camera with spaces')
+
     def test_source_excerpts_expose_full_file_hash_and_truncation(self):
         project=self.workspace.root/'indexed'
         (project/'rtl').mkdir(parents=True)

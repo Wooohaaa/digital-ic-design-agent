@@ -36,6 +36,23 @@ class EngineeringReviewTests(unittest.TestCase):
         self.assertEqual(report['engineering_signoff'],'not_granted')
         self.assertFalse(report['artifact_ready'])
 
+    def test_explicit_board_acceptance_blocks_delivery_until_physical_evidence_passes(self):
+        path=self.project/'project.json';manifest=json.loads(path.read_text())
+        manifest['verification']={'kind':'hdmi-cube'}
+        manifest['hardware_acceptance']={'required':True,'profile':'hdmi-cube'}
+        path.write_text(json.dumps(manifest))
+        with patch('fpga_agent.quality.simulation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.quality.implementation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.video_hardware.evidence_valid',return_value=(False,'no rotating image')):
+            report=review_project(self.project)
+        self.assertFalse(report['artifact_ready'])
+        gate=next(row for row in report['gates'] if row['id']=='HW-001')
+        self.assertTrue(gate['required']);self.assertEqual(gate['status'],'blocked')
+        with patch('fpga_agent.quality.simulation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.quality.implementation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.video_hardware.evidence_valid',return_value=(True,'physical reference matched')):
+            self.assertTrue(review_project(self.project)['artifact_ready'])
+
     def test_lint_uses_documented_flags_and_preserves_failure(self):
         with patch('fpga_agent.quality.shutil.which',return_value='verilator'), patch(
             'fpga_agent.quality.subprocess.run',side_effect=[
@@ -131,6 +148,28 @@ class EngineeringReviewTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'Archived verification input differs'):
                 do_package(self.project,simulation_only=True)
         self.assertEqual(artifact.read_bytes(),prior)
+
+    def test_hardware_report_bytes_survive_windows_crlf_in_delivery_archive(self):
+        manifest=load_manifest(self.project)
+        manifest['hardware_acceptance']={'required':True,'profile':'hdmi-cube'}
+        (self.project/'project.json').write_text(json.dumps(manifest))
+        reports=self.project/'reports';reports.mkdir(exist_ok=True)
+        (reports/'simulation.json').write_text('{"status":"pass"}')
+        (reports/'td.json').write_text(json.dumps({'run_directory':'td/runs/test','bitstreams':[],'bitstream_hashes':{}}))
+        raw=b'{\r\n  "status": "pass",\r\n  "artifacts": {}\r\n}\r\n'
+        (reports/'hardware-video.json').write_bytes(raw)
+        programming=b'{\r\n  "svf_file": "build/programming/test/program-sram.svf"\r\n}\r\n'
+        (reports/'programming.json').write_bytes(programming)
+        svf=self.project/'build/programming/test/program-sram.svf';svf.parent.mkdir(parents=True);svf.write_text('STATE RESET;')
+        with patch('fpga_agent.cli.simulation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.cli.implementation_valid',return_value=(True,'pass')), \
+             patch('fpga_agent.quality.review_project',return_value={'artifact_ready':True,'engineering_signoff':'not_granted','required_open_items':0}), \
+             patch('fpga_agent.video_hardware.evidence_valid',return_value=(True,'pass')):
+            self.assertEqual(do_package(self.project),0)
+        with zipfile.ZipFile(self.project/'deliverables/quality-delivery.zip') as archive:
+            self.assertEqual(archive.read('reports/hardware-video.json'),raw)
+            self.assertEqual(archive.read('reports/programming.json'),programming)
+            self.assertEqual(json.loads(archive.read('delivery.json'))['hardware_report_sha256'],hashlib.sha256(raw).hexdigest())
 
 
 if __name__ == '__main__':

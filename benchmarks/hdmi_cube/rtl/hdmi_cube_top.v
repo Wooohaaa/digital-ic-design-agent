@@ -1,10 +1,12 @@
-module hdmi_cube_top (
+module hdmi_cube_top #(
+    // This board/receiver combination loses lock with a prolonged RGB=0
+    // background. RGB=1 is visually black and was qualified on the capture
+    // chain. Strict RGB=0 remains selectable for separately qualified sinks.
+    parameter [7:0] BACKGROUND_LEVEL = 8'd1
+) (
     input  wire       I_sys_clk,
     output wire [2:0] O_hdmi_data_p,
-    output wire [2:0] O_hdmi_data_n,
-    output wire       O_hdmi_clk_p,
-    output wire       O_hdmi_clk_n,
-    output wire       O_hdmi_hpd
+    output wire       O_hdmi_clk_p
 );
 
     reg [15:0] por_counter = 16'd0;
@@ -85,9 +87,9 @@ module hdmi_cube_top (
         end
     end
 
-    wire [7:0] red_data = pixel_on ? 8'd40 : 8'd0;
-    wire [7:0] green_data = pixel_on ? 8'd220 : 8'd0;
-    wire [7:0] blue_data = pixel_on ? 8'd255 : 8'd0;
+    wire [7:0] red_data = pixel_on ? 8'd40 : BACKGROUND_LEVEL;
+    wire [7:0] green_data = pixel_on ? 8'd220 : BACKGROUND_LEVEL;
+    wire [7:0] blue_data = pixel_on ? 8'd255 : BACKGROUND_LEVEL;
     wire [9:0] blue_symbol;
     wire [9:0] green_symbol;
     wire [9:0] red_symbol;
@@ -111,10 +113,7 @@ module hdmi_cube_top (
     hdmi_serializer u_hdmi_serializer (
         .clk_pixel(clk_pixel), .clk_serial(clk_serial), .reset(pixel_reset),
         .blue(blue_symbol), .green(green_symbol), .red(red_symbol),
-        .data_p(O_hdmi_data_p), .data_n(O_hdmi_data_n),
-        .clock_p(O_hdmi_clk_p), .clock_n(O_hdmi_clk_n)
+        .data_p(O_hdmi_data_p), .clock_p(O_hdmi_clk_p)
     );
-
-    assign O_hdmi_hpd = por_done;
 
 endmodule

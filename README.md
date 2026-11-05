@@ -53,18 +53,20 @@ icforge task logs
 
 ## HX1P35A HDMI 3D 立方体
 
-`benchmarks/hdmi_cube` 是一次真实的多 Codex gpt-6-luna 端到端试验：6 个互不重叠的实现分工曾同时运行，之后进行顶层集成、只读审查和宿主独立验收。它在 HX1P35A 上生成 640×480 DVI/TMDS 视频，以双轴旋转、定点投影和双缓冲绘制线框立方体。
+`benchmarks/hdmi_cube` 来自一次真实的多 Codex gpt-6-luna 分工试验：6 个实现节点曾同时运行，随后完成集成与宿主独立验收。本轮宿主继续完成了真实开发板调试、下载和采集卡验收。
 
-![最终 RTL 帧缓冲的三个旋转角仿真画面；这是仿真预览，不是开发板照片](benchmarks/hdmi_cube/reports/rtl-preview.png)
+![HX1P35A 实板 HDMI 采集：双轴旋转立方体](docs/images/hdmi-cube-hardware.gif)
 
-最终独立验收通过：时序、TMDS、256 个姿态几何、双缓冲、串行器和顶层视频流全部通过；安路 TD full 产生 PH1P35MDG324 bitstream，setup WNS +7.286 ns、hold WNS +0.073 ns、TNS 均为 0，STA 覆盖率 99.88%，使用 38/108 ERAM。首轮综合发现旧 PLL 原语不支持此器件；执行者根据本机安路资料改用 `PH1P_PHY_PLL_V2` 后复验通过。
+**2026-11-05 实板通过**：两次独立 SRAM 重载，采集卡等待 5 秒锁定后，分别有 18/18 和 30/30 个采样帧匹配独立立方体几何并呈现多个变化姿态。全部 RTL 检查与 TD full 通过，setup/hold WNS +5.746/+0.066 ns，TNS 均为 0，使用 38/108 ERAM。没有写入 Flash。
+
+当前默认采用视觉上为黑色的 RGB(1,1,1) 兼容背景。纯黑 RGB(0,0,0) 在这套板卡/接收链路上仍失锁，具体电气或接收端原因尚未证实；保留 `BACKGROUND_LEVEL=0` 供单独验证，未把该模式标为实板通过。
 
 ```powershell
-python benchmarks/hdmi_cube/verification/acceptance.py
-python -m fpga_agent package benchmarks/hdmi_cube
+icforge video-hardware benchmarks/hdmi_cube --program --device Hagibis
+icforge flow benchmarks/hdmi_cube --hardware-video --device Hagibis
 ```
 
-仿真与 FPGA 实现通过不等于实板视觉验收。本轮尚未下载板卡，HDMI 显示器需连接后再检查实际输出。任务记录、方法和完整限制见 [HDMI 立方体工程试验](docs/hdmi-cube-flow.md)。
+本次经验已进入 agent：SVF 与位流载荷绑定、板卡独占锁、接收端锁定等待、连续视频与独立几何识别，以及要求实板验收时的打包/长期任务完成门禁。详见 [工程与交付](benchmarks/hdmi_cube/README.md)、[试验记录](docs/hdmi-cube-flow.md)、[实板证据摘要](docs/hdmi-cube-hardware.json)。
 
 ## 模型与验证
 

@@ -128,3 +128,14 @@ python scripts/capture_tui.py --verify
 ```
 
 框架参考：[Textual workers](https://textual.textualize.io/guide/workers/) 与 [Textual testing](https://textual.textualize.io/guide/testing/)。
+
+## HX1P35A 实板视频验收
+
+选择立方体工程后可输入 `/video-hardware`，采集已经通过下载门禁的板上画面；`/video-hardware --program --device Hagibis` 显式请求先下载 SRAM。命令行等价调用为：
+
+```powershell
+icforge video-hardware benchmarks/hdmi_cube --program --device Hagibis
+icforge flow benchmarks/hdmi_cube --hardware-video --device Hagibis
+```
+
+默认连续采集 12 秒并丢弃前 5 秒锁定期，保存原始视频与 PNG，对照独立立方体参考并检查姿态变化。下载载荷、编程操作和证据哈希绑定；黑屏、无信号、彩条、静止立方体都失败。配置 `hardware_acceptance.required=true` 的工程，实板未通过不能作为完整交付完成。详见 [板级工程记录](hdmi-cube-flow.md)。

@@ -33,6 +33,7 @@ COMMANDS = {
     "/provider": "切换接口：api / chat / codex / exchange",
     "/theme": "选择终端主题",
     "/tinyllm": "TinyStories260K 工程：/tinyllm name --full",
+    "/video-hardware": "采集 HDMI 验证旋转；--program 显式下载到 SRAM",
     "/logo": "选择 ICFORGE 字标",
     "/plan": "切换 Plan / Build", "/run": "执行待运行计划",
     "/task": "启动持续任务：/task 目标（--simulation-only 仅仿真）",
@@ -282,6 +283,13 @@ def evidence(project: Path) -> dict:
         except (ValueError, KeyError, OSError, TypeError) as exc:
             result[key] = "stale"
             result[key + "_reason"] = str(exc)
+    result['hardware_required']=manifest.get('hardware_acceptance',{}).get('required') is True
+    if manifest.get('verification',{}).get('kind')=='hdmi-cube':
+        from .video_hardware import evidence_valid
+        hardware=read_json(project/'reports/hardware-video.json',{})
+        valid,reason=evidence_valid(project,hardware)
+        result['hardware']='current' if valid else 'failed' if hardware.get('status')=='fail' else 'stale' if hardware else 'missing'
+        result['hardware_reason']=reason
     return result
 
 
@@ -308,7 +316,7 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
     if action == "suite":
         commands = [cli + ["cpu-suite", "--root", str(workspace.root / "benchmarks")] + (["--full"] if full else [])]
         return TaskPlan("RISC-V benchmark suite", commands)
-    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review"}:
+    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review", "video-hardware"}:
         raise ValueError(f"不支持的工具：{action}")
     if not project:
         raise ValueError("先使用 /project 选择工程，或 /init name 创建工程。")
@@ -353,6 +361,14 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
             commands = [cli + ["td", str(project), "--stage", "synth" if action == "synth" else "full"]]
         else:
             commands = [cli + [action, str(project)]]
+            if action=='video-hardware':
+                program=arguments.get('program',False)
+                if not isinstance(program,bool):raise ValueError('program 必须是布尔值。')
+                if program:commands[0].append('--program')
+                device=arguments.get('device')
+                if device is not None:
+                    if not isinstance(device,str) or not device.strip():raise ValueError('device 必须是采集设备名称。')
+                    commands[0] += ['--device',device]
             if action == "package" and arguments.get("simulation_only") is True:
                 commands[0].append("--simulation-only")
             if action == 'review' and arguments.get('simulation_only') is True:

@@ -11,16 +11,15 @@ Anlogic PH1P35MDG324, TD family `ph1`, 50 MHz clock C4 LVCMOS33.
 HDL2604 board manual pages 14/15 and supplied schematic HX1P35B_FT_40P_7.pdf:
 data0 P=G16 N=H16; data1 P=F17 N=E18; data2 P=H14 N=H13;
 clock P=C17 N=D18; HDMI_HPD/control B17; DDC SCL=E15 SDA=F15.
-Use native TMDS33 differential output buffers in HR bank32. Do not drive differential
-pairs using unrelated fabric pins or LVCMOS. Board B17 also controls TPS2051B's 5V enable;
-inspect the schematic and document a source-mode high output. DDC may remain unconnected.
+Use the board's TMDS33 P-side pins in HR bank32. The paired N pads are inferred by TD from
+each P-side TMDS33 assignment; do not expose them as separate logical output ports. Leave
+B17 (HDMIA_HPD) undriven, matching the supplied reference design. DDC may remain unconnected.
 
 Primary vendor library: `C:/Anlogic/TD_6.2.1_Engineer_6.2.168.116/doc/UG1310_PH1P_Libraries_Guide_for_HDL_Designs.pdf`.
 Relevant extracted text at original repository `reports/hdmi-board-docs/vendor-library.txt`.
 Vendor simulator sources under `C:/Anlogic/TD_6.2.1_Engineer_6.2.168.116/sim_release/ph1p/`.
-PH1P_LOGIC_HR_OSERDES has sclk,pclk,rst,idata[9:0],odata; ODDRMODE="DDRX5" is supported.
-PH1P_LOGIC_OBUF_DIFF has i,t,o_p,o_n. Set t=0. PLL ports/parameters must be verified
-against PH1P_PHY_PLL in the installed vendor simulator, not guessed from other Anlogic families.
+The supplied PH1P example's `PH1P_LOGIC_ODDR` and its `lane_lvds_10_1` structure are the hardware
+serialization reference. PLL ports/parameters are verified against the installed PH1P library.
 
 ## Fixed module contracts (Verilog/SystemVerilog synthesizable by TD)
 
@@ -64,24 +63,36 @@ against PH1P_PHY_PLL in the installed vendor simulator, not guessed from other A
 5. `rtl/hdmi_phy.v`: modules hdmi_clocks(input clk50,input reset,
    output clk_pixel,output clk_serial,output locked) and hdmi_serializer(input clk_pixel,
    input clk_serial,input reset,input [9:0] blue,input [9:0] green,input [9:0] red,
-   output [2:0] data_p,output [2:0] data_n,output clock_p,output clock_n).
-   Hardware pixel clock25.2MHz (640x480 exactly60Hz), serial clock126MHz DDR (252Mb/s per lane).
-   Prefer PLL VCO630MHz with legal vendor dividers, but derive actual legality/parameters from
-   installed source. Use HR_OSERDES DDRX5 plus DIFF buffers; no fabric 252MHz bit-bang.
-   Blue->lane0,green->lane1,red->lane2; bit0 first; clock forwarded differentially.
+   output [2:0] data_p,output clock_p).
+   Hardware pixel clock25MHz (640x480 at 59.52Hz), serial clock125MHz DDR (250Mb/s per lane).
+   Use PH1P_PHY_PLL_V2 external feedback through a BUFG, with legal vendor dividers and loop
+   settings cross-checked against the supplied Anlogic PLL example. Use PH1P_LOGIC_ODDR with
+   the example's 10:1 shift structure for blue, green, red, and forwarded clock; no fabric
+   250MHz bit-bang. Drive each assigned TMDS33 P-side pin directly from its ODDR lane; let TD
+   infer the paired N pad. Blue->lane0,green->lane1,red->lane2; bit0 first.
+   PH1P_PHY_PLL_V2's reserved refclk_rst and wakeup pins must be tied low and high,
+   respectively, per the installed UG1310 PH1P library guide; use pllreset for reset. SSC is
+   disabled and ssc_reset is tied low, matching the supplied generated PLL instance.
    Include clearly separated `ifdef ICFORGE_SIM behavioral models, timescale1ps/1ps;
-   simulation half-periods pixel19840ps/serial3968ps exactly5:1. Behavioral model must preserve
+   simulation half-periods pixel20000ps/serial4000ps exactly5:1. Behavioral model must preserve
    symbol boundaries and word latency, reset deterministically, and document its alignment.
    `ICFORGE_SIM must never be enabled in TD synthesis; no vendor primitive redefinitions.
 
 6. `rtl/hdmi_cube_top.v`: module hdmi_cube_top(input I_sys_clk,output [2:0] O_hdmi_data_p,
-   output [2:0] O_hdmi_data_n,output O_hdmi_clk_p,output O_hdmi_clk_n,output O_hdmi_hpd).
+   output O_hdmi_clk_p). Do not drive B17/HDMIA_HPD as an output.
    Self-starting POR counter initialized to0 from50MHz; reset while POR or !PLLlocked, release
    reset synchronously in pixel domain. Instantiate fixed modules, align de/hsync/vsync with
-   framebuffer's registered read and encoder latency. Cube RGB=(40,220,255); black background.
+   framebuffer's registered read and encoder latency. Cube RGB=(40,220,255); near-black
+   background RGB=(1,1,1), selected by parameter BACKGROUND_LEVEL=8'd1. This is an explicit
+   board-acceptance contract revision: the actual HX1P35A/Hagibis chain loses lock with
+   extended RGB=(0,0,0), while RGB=(1,1,1) and the unchanged full cube pipeline display.
+   BACKGROUND_LEVEL=0 retains strict black for sinks that are separately qualified; it is
+   not claimed as passing this hardware trial. Geometry, framebuffer off-pixel bits,
+   TMDS encoding, raster and timing requirements are unchanged. The root electrical or
+   receiver-specific cause of the RGB=0 sensitivity is not established.
    No blinking pause or tearing. Drive source enable correctly after schematic check.
    Add `project.json`, `constraints/hx1p35a.adc`, `constraints/hx1p35a.sdc` and README.
-   SDC must constrain 50MHz input, all generated clocks25.2/126MHz and their relationship;
+   SDC must constrain 50MHz input, all generated clocks25/125MHz and their relationship;
    do not blanket false-path pixel/serializer crossings or waive negative setup/hold slack.
    manifest board=hx1p35a, device_family=ph1, device=PH1P35MDG324, top=hdmi_cube_top.
 

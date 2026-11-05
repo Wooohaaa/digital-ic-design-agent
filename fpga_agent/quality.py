@@ -125,7 +125,7 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         gates.append({'id':identifier,'owner':owner,'status':status,'detail':detail,
                       'next_action':action,'evidence':evidence or [],'required':required})
 
-    docs = ['spec/brief.md','spec/design.md']
+    docs = ['SPEC.md'] if manifest.get('verification',{}).get('kind')=='hdmi-cube' else ['spec/brief.md','spec/design.md']
     missing = [name for name in docs if not (project/name).is_file() or not (project/name).read_text(encoding='utf-8').strip()]
     add('SPEC-001','requirements','blocked' if missing else 'pass',
         'Missing specification: '+', '.join(missing) if missing else 'Requirements and design description are recorded.',
@@ -138,12 +138,16 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         '' if valid_sim else 'Run /verify and resolve the first failing counterexample.',['reports/simulation.json'])
     cpu = manifest.get('verification',{}).get('kind') == 'riscv-retire'
     tinyllm = manifest.get('verification',{}).get('kind') == 'tinystories-fp32'
+    hdmi = manifest.get('verification',{}).get('kind') == 'hdmi-cube'
     trusted_hdl = manifest.get('verification',{}).get('kind') == 'trusted-testbench'
     trusted_hdl_ok, trusted_hdl_detail = trusted_testbench_valid(project,manifest) if trusted_hdl else (False,'')
-    independent = cpu or tinyllm or (trusted_hdl and trusted_hdl_ok)
+    independent = cpu or tinyllm or hdmi or (trusted_hdl and trusted_hdl_ok)
     if cpu:
         traceable = valid_sim
         detail = f"Independent retirement/store/memory comparison: {simulation.get('case_count',0)} cases, {simulation.get('seeds',0)} random seeds."
+    elif hdmi:
+        traceable=valid_sim
+        detail='Independent raster, TMDS, 256-pose geometry, framebuffer, synthesizable serializer and top-level video checks.'
     elif trusted_hdl:
         traceable = valid_sim and trusted_hdl_ok
         detail = trusted_hdl_detail
@@ -194,12 +198,16 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
     if tinyllm:
         from .hardware_evidence import hardware_valid
         hardware_ok,hardware_detail=hardware_valid(project,read_report(project/'reports/hardware.json'))
-    add('HW-001','integration','pass' if hardware_ok else 'not_run',hardware_detail,
+    elif hdmi:
+        from .video_hardware import evidence_valid
+        hardware_ok,hardware_detail=evidence_valid(project,read_report(project/'reports/hardware-video.json'))
+    hardware_required=scope=='fpga' and manifest.get('hardware_acceptance',{}).get('required') is True
+    add('HW-001','integration','pass' if hardware_ok else 'blocked' if hardware_required else 'not_run',hardware_detail,
         '' if hardware_ok else 'Program the board and record observed outputs against the hardware acceptance procedure.',
-        ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else [],required=False)
-    artifact_ready = valid_sim and (scope == 'simulation' or valid_td)
+        ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else ['reports/hardware-video.json'] if hdmi else [],required=hardware_required)
+    artifact_ready = valid_sim and (scope == 'simulation' or valid_td) and (not hardware_required or hardware_ok)
     profile = ('trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else
-               'trusted-hdl-testbench' if trusted_hdl else 'generated-self-check')
+               'trusted-hdmi-cube' if hdmi else 'trusted-hdl-testbench' if trusted_hdl else 'generated-self-check')
     report = {'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(),
               'project':manifest.get('project',project.name),'scope':scope,
               'artifact_ready':artifact_ready,'engineering_signoff':'not_granted',

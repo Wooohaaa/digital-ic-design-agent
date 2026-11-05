@@ -2,13 +2,39 @@ import hashlib
 import socket
 import threading
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from fpga_agent.bitbang_relay import BitbangRelay
-from fpga_agent.programmer import probe_chain
+from fpga_agent.programmer import probe_chain, validate_svf_payload
 
 
 class ProgrammerTests(unittest.TestCase):
+    def test_svf_payload_is_bound_to_binary_body_and_not_header_metadata(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);bit=root/'image.bit';svf=root/'image.svf'
+            payload=bytes(range(256))*2
+            reverse=bytes(int(f'{value:08b}'[::-1],2) for value in range(256))
+            tdi=payload[::-1].translate(reverse).hex()
+            svf.write_text(f'SDR 32 TDI (0);\nSDR {len(payload)*8} TDI ({tdi});')
+            bit.write_bytes(b'# Anlogic ASCII Bitstream\n# Build A\n'+payload)
+            first=validate_svf_payload(bit,svf)
+            self.assertEqual(first['sha256'],hashlib.sha256(payload).hexdigest())
+            bit.write_bytes(b'# Anlogic ASCII Bitstream\n# Build B with a different timestamp\n'+payload)
+            self.assertEqual(validate_svf_payload(bit,svf)['sha256'],first['sha256'])
+            bit.write_bytes(bit.read_bytes()[:-1]+b'\x00')
+            with self.assertRaisesRegex(ValueError,'payload does not match'):
+                validate_svf_payload(bit,svf)
+
+    def test_missing_or_truncated_svf_cannot_grant_download_evidence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);bit=root/'image.bit';svf=root/'image.svf'
+            bit.write_bytes(b'# Anlogic ASCII Bitstream\n'+bytes(512))
+            for text in ('', 'SDR 4096 TDI (00);'):
+                svf.write_text(text)
+                with self.assertRaises(ValueError):validate_svf_payload(bit,svf)
+
     def scan(self, words):
         class Connection:
             data=bytearray(''.join(f'{v:032b}'[::-1] for v in words).encode())

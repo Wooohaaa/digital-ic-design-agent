@@ -6,14 +6,9 @@
   "source": "User-supplied HDL2604 board manual pages 14/15 and HX1P35B_FT_40P_2/7 schematics",
   "signals": {
     "I_sys_clk": {"pin": "C4", "direction": "input", "io_standard": "LVCMOS33"},
-    "O_hdmi_data_p[0]": {"pin": "G16", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_data_n[0]": {"pin": "H16", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_data_p[1]": {"pin": "F17", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_data_n[1]": {"pin": "E18", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_data_p[2]": {"pin": "H14", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_data_n[2]": {"pin": "H13", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_clk_p": {"pin": "C17", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_clk_n": {"pin": "D18", "direction": "output", "io_standard": "TMDS33"},
-    "O_hdmi_hpd": {"pin": "B17", "direction": "output", "io_standard": "LVCMOS33", "meaning": "source-mode 5V power-switch enable"}
+    "O_hdmi_data_p[0]": {"pin": "G16", "differential_partner": "H16", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_data_p[1]": {"pin": "F17", "differential_partner": "E18", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_data_p[2]": {"pin": "H14", "differential_partner": "H13", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_clk_p": {"pin": "C17", "differential_partner": "D18", "direction": "output", "io_standard": "TMDS33"}
   }
 }

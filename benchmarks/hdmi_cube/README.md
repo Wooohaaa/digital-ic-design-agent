@@ -4,7 +4,8 @@ This project renders a rotating 3-D wireframe cube to the HX1P35A HDMI connector
 
 ## Board I/O
 
-The HDMI data and forwarded-clock differential pairs use the board's HR bank 32 TMDS outputs:
+The HDMI data and forwarded-clock outputs use the board's HR bank 32 TMDS33 pads. The top-level
+drives one P-side signal per lane; TD infers the paired N pad from the TMDS33 assignment:
 
 | Signal | FPGA pins |
 | --- | --- |
@@ -13,9 +14,23 @@ The HDMI data and forwarded-clock differential pairs use the board's HR bank 32 
 | TMDS data lane 2 (red) | H14 / H13 |
 | TMDS clock | C17 / D18 |
 | 50 MHz reference clock | C4 |
-| Board HDMI control / 5 V switch enable | B17 |
+| Board HDMI_HPD signal (left unassigned) | B17 |
 
-The board schematic connects B17 (`HDMI1_HPD`) to the TPS2051B enable for HDMI +5 V. `O_hdmi_hpd` is therefore driven high after the power-on delay to enable source-mode +5 V; it is not used as a cable HPD input. DDC is left unconnected.
+The supplied Anlogic reference design leaves B17 unassigned. IC Forge also leaves it undriven;
+an earlier test that drove B17 high was not detected by the capture card. DDC remains unconnected.
+
+## Physical board capture
+
+The following animation is a real Hagibis capture from the HX1P35A, after receiver lock.
+It is not an RTL simulation or generated mockup.
+
+![Actual HX1P35A rotating cube capture](../../docs/images/hdmi-cube-hardware.gif)
+
+The qualified default background is near-black RGB=(1,1,1). Extended RGB=(0,0,0)
+failed to lock on this board/receiver chain. `BACKGROUND_LEVEL=0` remains selectable,
+but is **not hardware-qualified here**. The electrical or receiver-specific reason
+for that data-pattern sensitivity has not been established. This is a documented
+compatibility setting, not a claim that strict-black TMDS is inherently invalid.
 
 ## RTL simulation preview
 
@@ -25,15 +40,53 @@ The image below contains three actual 640×480 framebuffer captures generated fr
 
 ## Clocks and alignment
 
-The PH1P35 uses `PH1P_PHY_PLL_V2` with `REFCLK_DIV=5`, `FBCLK_DIV=63`, and output dividers 25 and 5. This yields a 630 MHz VCO, a 25.2 MHz pixel clock, and a 126 MHz serializer clock; the clocks share the 50 MHz reference and their 5:1 relationship is constrained in SDC. The serializer sends each TMDS symbol least-significant bit first over DDRX5 and uses native differential output buffers.
+The PH1P35 uses `PH1P_PHY_PLL_V2` with external feedback through a BUFG, following the supplied Anlogic example's topology and loop settings. Output C0 is 50 MHz for feedback; C4 and C5 use dividers 50 and 10 to produce 25 MHz pixel and 125 MHz serializer clocks. TD cannot derive clock parameters from this primitive, so SDC constrains both PLL outputs explicitly (`/2` and `×2.5`), preserving the intended 5:1 ratio. The 25 MHz mode yields 640×480 at about 59.52 Hz. Only the asynchronous reset request path is excluded from setup/recovery analysis. Four `PH1P_LOGIC_ODDR` lanes serialize blue, green, red, and the forwarded 50% pixel clock; each ODDR drives its TMDS33 P-side top-level pin, with TD pairing the N pad as shown in the vendor reference layout report.
 
 The framebuffer read is synchronous and contributes one pixel of latency. The DE, HSYNC, and VSYNC control inputs are delayed by one pixel before the single-register TMDS encoders, aligning control symbols with the sampled framebuffer pixel. Blue carries HSYNC/VSYNC during blanking; red and green use control code 00.
 
 ## Acceptance result
 
-The host-owned independent acceptance passed on 2026-11-05. All functional checks passed, including the complete top-level video stream. Native TD full produced a PH1P35MDG324 bitstream with setup WNS +7.286 ns, hold WNS +0.073 ns, setup/hold TNS 0 ns, 99.88% STA coverage, and 38/108 ERAM used. The implementation used 832/21,216 LUT6 and 4/40 DSP.
+On 2026-11-05 the current RTL passed independent raster, exhaustive/random TMDS,
+256-pose geometry, double-buffer rendering, full top-level RGB recovery, and
+synthesizable ODDR-branch checks across 16 clock-phase cases with staggered input
+bit delays. The functional ODDR model uses documented d0/rising and d1/falling
+semantics; it does not claim vendor timing simulation.
 
-The initial TD run rejected `PH1P_PHY_PLL` as unsupported for this device/package. The installed PH1P device template and PLL support data identify `PH1P_PHY_PLL_V2` for PH1P35MDG324; after changing the primitive and keeping the divider configuration, the complete simulation and TD acceptance passed. This result establishes the current simulation and implementation gates only. Programming the FPGA and observing a connected HDMI display remain outstanding.
+Native Anlogic TD 6.2.168.116 full closed setup WNS **+5.746 ns**, hold WNS
+**+0.066 ns**, both TNS **0**, and STA coverage **99.99%**. Resource use is
+847/21,216 LUT6, 38/108 ERAM, 4/40 DSP and 9 pads. Unused DRP/dynamic phase clock
+inputs are tied low, matching the supplied generated Anlogic example.
+
+Two separate SRAM downloads and physical capture trials passed: **18/18** accepted
+samples after a 5-second settling interval in the first 14-second capture, and
+**30/30** in a fresh 20-second capture. Each sample was compared against independent
+cube geometry; multiple changing pose groups were required. Black screens,
+No Signal, bars and static images are rejected. Flash was not written.
+
+Qualified bitstream SHA-256:
+`8a91ebb24042e39ec3d17c9442c25864391914f8ec6232cd021def545b698431`
+
+- Stable local image: `deliverables/hdmi_cube-hx1p35a.bit`.
+- Delivery archive: `deliverables/hdmi_cube-delivery.zip` (contains the exact implemented
+  image, RTL, native timing reports, payload-bound programming evidence and raw video).
+- Physical evidence: `reports/hardware-video.json`; trial summary is also available
+  in [docs/hdmi-cube-hardware.json](../../docs/hdmi-cube-hardware.json).
+- Local MP4: `deliverables/hdmi_cube-hardware.mp4`.
+
+```powershell
+# Complete host verification and native implementation
+python benchmarks/hdmi_cube/verification/acceptance.py
+# Explicit SRAM programming, receiver settling, capture and reference checking
+icforge video-hardware benchmarks/hdmi_cube --program --device Hagibis
+# Or perform the entire flow including physical acceptance and packaging
+icforge flow benchmarks/hdmi_cube --hardware-video --device Hagibis
+```
+
+`hardware_acceptance.required=true` makes a missing/stale/failed physical report
+block FPGA delivery and persistent task completion. SVF success checks identity
+and scan execution; configuration readback is not claimed. The programmed scan
+payload is compared byte-for-byte with the validated .bit binary body. Hardware
+operations use an OS-held exclusive lease across programming and capture.
 
 ## Checks
 

@@ -93,10 +93,26 @@ class VideoChecks:
         for port,signal in board['signals'].items():
             if found.get(port,{}).get('LOCATION')!=signal['pin'] or found.get(port,{}).get('IOSTANDARD')!=signal['io_standard']:
                 raise ValueError('pin/electrical standard differs from verified schematic: '+port)
+            partner=signal.get('differential_partner')
+            if partner:
+                if signal['io_standard']!='TMDS33' or port.endswith('_n'):
+                    raise ValueError('TMDS differential outputs must use a P-side port with an implicit paired N pad: '+port)
+                if any(other.get('LOCATION')==partner for name,other in found.items() if name!=port):
+                    raise ValueError('paired TMDS N pad must not be assigned as a second top-level port: '+partner)
         sdc=(self.project/manifest['timing_constraints']).read_text(encoding='utf-8')
         if not re.search(r'create_clock[^\n]*-period\s+20(?:\.0*)?\b',sdc):raise ValueError('missing 50 MHz input constraint')
-        if not any(word in sdc for word in ('create_generated_clock','derive_pll_clocks')):raise ValueError('generated clock constraints missing')
-        if re.search(r'set_false_path[^\n]*get_clocks|set_clock_groups[^\n]*-asynchronous',sdc):
+        required_pll_clocks=(
+            ('hdmi_pixel_clk',r'-divide_by\s+2(?:\.0+)?\b',r'u_hdmi_clocks/u_hdmi_pll\.clkc\[4\]'),
+            ('hdmi_serial_clk',r'-multiply_by\s+2\.5(?:0+)?\b',r'u_hdmi_clocks/u_hdmi_pll\.clkc\[5\]'),
+        )
+        for name,ratio,target in required_pll_clocks:
+            matches=[line for line in sdc.splitlines() if re.search(r'create_generated_clock[^\n]*-name\s+'+name+r'\b',line)]
+            if len(matches)!=1 or not re.search(ratio,matches[0]) or not re.search(target,matches[0]):
+                raise ValueError(f'missing or incorrect generated clock constraint: {name}')
+        reset_exceptions=[line for line in sdc.splitlines() if 'set_false_path' in line and 'pixel_reset_request' in line]
+        if len(reset_exceptions)!=1 or '-setup' not in reset_exceptions[0] or 'sys_clk_50m' not in reset_exceptions[0] or '-through' not in reset_exceptions[0] or 'get_nets' not in reset_exceptions[0]:
+            raise ValueError('the async reset crossing must be constrained only through its request net')
+        if re.search(r'set_false_path[^\n]*-to\s+\[get_clocks|set_clock_groups[^\n]*-asynchronous',sdc):
             raise ValueError('related HDMI clocks cannot be blanket false-pathed/asynchronous')
         for source in manifest['rtl_sources']:
             if re.search(r'(?m)^\s*`define\s+ICFORGE_SIM\b',(self.project/source).read_text(encoding='utf-8')):
@@ -257,12 +273,12 @@ endmodule
 `timescale 1ps/1ps
 module tb;
 reg pc=0,sc=0,reset=1;always #20 pc=~pc;always #4 sc=~sc;
-reg[9:0]b=0,g=0,r=0;wire[2:0]dp,dn;wire cp,cn;
-hdmi_serializer dut(pc,sc,reset,b,g,r,dp,dn,cp,cn);
+reg[9:0]b=0,g=0,r=0;wire[2:0]dp;wire cp;
+hdmi_serializer dut(pc,sc,reset,b,g,r,dp,cp);
 integer i,samples,fileid;reg recording=0;
 always @(posedge sc or negedge sc)begin #1;
 if(recording)begin
-if(dn!==~dp || cn!==~cp)$fatal(1,"differential outputs");
+if((^dp)===1'bx || cp===1'bx)$fatal(1,"unknown P-side TMDS output");
 $fwrite(fileid,"%0t %h %b\\n",$time,dp,cp);end end
 initial begin
 fileid=$fopen("{directory}/serial.txt","w");
@@ -285,8 +301,93 @@ endmodule
                 if words[start:start+100]==expected[4:104]:matched=True
         if not matched:raise ValueError('serializer word boundary/bit order/lane order mismatch')
         clocks=[int(row[2]) for row in samples]
-        if any(clocks[i]!=clocks[i+10] for i in range(len(clocks)-10)) or not 0.45<sum(clocks)/len(clocks)<.55:
+        # Ignore the reset-release fill latency of the four registered ODDR lanes.
+        steady=clocks[40:-40]
+        if len(steady)<200 or any(steady[i]!=steady[i+10] for i in range(len(steady)-10)) or not 0.45<sum(steady)/len(steady)<.55:
             raise ValueError('forwarded clock is not a stable 50% pixel clock')
+        self.hardware_serializer()
+
+    def hardware_serializer(self):
+        """Exercise the synthesizable branch with a single-edge-input DDR model.
+
+        UG1310 section 28 and ph1p_logic_hrio.v define d0 as rising-edge
+        output data and d1 as falling-edge output data. Both halves of the
+        fabric pair must be captured before the upstream NBA register update.
+        This functional model does not substitute for vendor timing simulation.
+        """
+        directory=self.directory.as_posix();bench=self.directory/'serializer-hardware.sv'
+        binary=self.directory/'serializer-hardware.vvp';capture=self.directory/'serial-hardware.txt'
+        bench.write_text(f'''
+`timescale 1ps/1ps
+module PH1P_LOGIC_ODDR(input wire clk,input wire rst,input wire d1,input wire d0,output reg q);
+reg falling_half;
+always @(posedge clk or posedge rst) begin
+if(rst) begin q<=1'b0;falling_half<=1'b0;end
+else begin q<=d0;falling_half<=d1;end
+end
+always @(negedge clk or posedge rst) if(rst) q<=1'b0; else q<=falling_half;
+endmodule
+module tb;
+reg pc=0,sc=0,reset=1;always #4000 sc=~sc;
+integer phase;
+initial begin
+if(!$value$plusargs("phase=%d",phase))phase=0;
+#(phase);forever #20000 pc=~pc;
+end
+reg[9:0]b=0,g=0,r=0;wire[2:0]dp;wire cp;
+hdmi_serializer dut(pc,sc,reset,b,g,r,dp,cp);
+integer i,j,fileid;reg recording=0;
+always @(posedge sc or negedge sc)begin #1;if(recording)$fwrite(fileid,"%h %b\\n",dp,cp);end
+initial begin
+fileid=$fopen("{capture.as_posix()}","w");if(fileid==0)$fatal(1,"capture open");
+repeat(5)@(negedge pc);reset=0;repeat(5)@(negedge pc);recording=1;
+// Registered encoder outputs have independent clock-to-Q/routing delay.
+// A serializer must not capture a mixture of two successive pixel symbols.
+for(i=0;i<128;i=i+1)begin @(posedge pc);
+for(j=0;j<10;j=j+1)begin
+b[j]<=#(100+j*100)(((i*37+19)>>j)&1);
+g[j]<=#(100+j*100)(((i*71+263)>>j)&1);
+r[j]<=#(100+j*100)(((i*109+587)>>j)&1);
+end end
+repeat(6)@(negedge pc);recording=0;$fclose(fileid);$display("HARDWARE_SERIALIZER_PASS");$finish;end
+initial begin #12000000;$fatal(1,"hardware serializer timeout");end
+endmodule
+''',encoding='utf-8')
+        argv=[self.compiler,'-g2012','-s','tb','-o',str(binary),str(self.project/'rtl/hdmi_phy.v'),str(bench)]
+        started=time.monotonic()
+        compiled=subprocess.run(argv,cwd=self.project,env=self.env,capture_output=True,text=True,errors='replace',timeout=60)
+        log=compiled.stdout+compiled.stderr
+        if compiled.returncode:
+            (self.directory/'serializer-hardware.log').write_text(log,encoding='utf-8')
+            raise ValueError('hardware serializer compile failed: '+log[-4000:])
+        for phase in range(0,8000,500):
+            self._check_hardware_serial_capture(binary,capture,phase,log)
+        if self.rows and self.rows[-1].get('id')=='serializer':
+            self.rows[-1]['oddr_rtl_simulation']='pass'
+            self.rows[-1]['oddr_phase_cases']=16
+            self.rows[-1]['hardware_seconds']=round(time.monotonic()-started,3)
+
+    def _check_hardware_serial_capture(self,binary,capture,phase,compile_log):
+        result=subprocess.run([self.runtime,str(binary),f'+phase={phase}'],cwd=self.project,env=self.env,capture_output=True,text=True,errors='replace',timeout=30)
+        log=compile_log
+        log+=result.stdout+result.stderr;(self.directory/'serializer-hardware.log').write_text(log,encoding='utf-8')
+        if result.returncode or result.stdout.count('HARDWARE_SERIALIZER_PASS')!=1:
+            raise ValueError('hardware serializer failed: '+log[-4000:])
+        rows=[line.split() for line in capture.read_text(encoding='ascii').splitlines()]
+        if len(rows)<1280:raise ValueError('hardware serializer capture incomplete')
+        expected=[tuple((i*factor+offset)&1023 for factor,offset in ((37,19),(71,263),(109,587))) for i in range(128)]
+        matched=False
+        for phase in range(10):
+            words=[]
+            for base in range(phase,len(rows)-9,10):
+                words.append(tuple(sum(((int(rows[base+bit][0],16)>>lane)&1)<<bit for bit in range(10)) for lane in range(3)))
+            for start in range(max(0,len(words)-128)):
+                if words[start:start+128]==expected:matched=True;break
+            if matched:break
+        if not matched:raise ValueError(f'PH1P ODDR symbol capture failed with pixel/serial phase={phase}ps: word boundary, bit order, or mixed symbols')
+        clocks=[int(row[1]) for row in rows];steady=clocks[40:-40]
+        if len(steady)<200 or any(steady[i]!=steady[i+10] for i in range(len(steady)-10)) or not 0.45<sum(steady)/len(steady)<0.55:
+            raise ValueError('PH1P ODDR forwarded clock is not a stable 50% pixel clock')
 
     def top(self):
         path=self.directory/'top-symbols.txt'
@@ -294,20 +395,20 @@ endmodule
 `timescale 1ps/1ps
 module tb;
 reg clk50=0;always #10000 clk50=~clk50;
-wire[2:0]dp,dn;wire cp,cn,hpd;
-hdmi_cube_top dut(clk50,dp,dn,cp,cn,hpd);
+wire[2:0]dp;wire cp;
+hdmi_cube_top dut(clk50,dp,cp);
 integer fileid,wordn,bitn;reg[9:0]blue,green,red;
 initial begin
 fileid=$fopen("{path.as_posix()}","w");if(fileid==0)$fatal(1,"capture open");
-wait(hpd===1'b1);
+wait(dut.pixel_reset===1'b0);
 repeat(1000)@(posedge cp);
 for(wordn=0;wordn<842000;wordn=wordn+1)begin
 @(posedge cp);#3;
 blue=0;green=0;red=0;
 for(bitn=0;bitn<10;bitn=bitn+1)begin
-if((^dp===1'bx)||dn!==~dp||cn!==~cp||hpd!==1'b1)$fatal(1,"top differential/source-enable");
+if((^dp===1'bx)||cp===1'bx)$fatal(1,"top P-side TMDS/clock output");
 blue[bitn]=dp[0];green[bitn]=dp[1];red[bitn]=dp[2];
-if(bitn<9)#3968;
+if(bitn<9)#4000;
 end
 $fwrite(fileid,"%03h %03h %03h\\n",blue,green,red);
 end
@@ -342,7 +443,7 @@ endmodule
             else:
                 rgb=(decode(word[2]),decode(word[1]),decode(word[0]))
                 on=frame>0 and frame-1<len(frames) and (x,y) in frames[frame-1]
-                if rgb!=((40,220,255) if on else (0,0,0)):
+                if rgb!=((40,220,255) if on else (1,1,1)):
                     raise ValueError(f'top RGB/read/encoder alignment at frame={frame},x={x},y={y}: {rgb}, expected pixel={int(on)}')
                 if frame==1:count+=1;lit+=int(on)
         if count!=640*480 or not lit:raise ValueError('top complete rotating-frame capture missing')
@@ -387,6 +488,9 @@ def evidence_valid(project: Path,manifest: dict,report: dict) -> tuple[bool,str]
     rows=report.get('checks',[])
     if not isinstance(rows,list) or [row.get('id') for row in rows]!=['board','timing','tmds','geometry','framebuffer','serializer','top'] or any(row.get('status')!='pass' for row in rows):
         return False,'HDMI independent check inventory incomplete'
+    serializer=rows[5]
+    if serializer.get('oddr_rtl_simulation')!='pass' or serializer.get('oddr_phase_cases')!=16:
+        return False,'Synthesizable ODDR branch phase/skew simulation is incomplete'
     frames=report.get('frames',[])
     if not isinstance(frames,list) or len(frames)!=3 or [f.get('angle') for f in frames]!=[0,1,2] or len({f.get('bitmap_sha256') for f in frames})!=3:
         return False,'HDMI rotating frame evidence incomplete'

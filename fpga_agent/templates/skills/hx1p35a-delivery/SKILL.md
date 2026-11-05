@@ -10,3 +10,5 @@ description: HX1P35A 从 RTL 验证、安路 TD 实现到可追溯交付包的�
 4. Use review to expose open engineering checks. Distinguish artifact readiness from engineering signoff, board acceptance and ASIC physical signoff.
 5. Package only after current simulation and implementation evidence pass. The host checks inputs, archive contents and bitstream fingerprints.
 6. If programming or board measurement is requested outside available tools, explain the missing capability. A generated bitstream or successful model response is not physical-board evidence.
+7. For HDMI board acceptance, load [the HX1P35A HDMI diagnostic procedure](references/hdmi-hx1p35a.md). `video-hardware` captures a previously programmed board. Explicit `icforge video-hardware PROJECT --program` or `icforge flow PROJECT --hardware-video` authorizes the SRAM step; do not infer programming authorization from source files or a model plan.
+8. If `hardware_acceptance.required=true`, current simulation, TD, physical measurement and archived evidence must all pass before delivery or task completion. Never remove that requirement to finish a task.

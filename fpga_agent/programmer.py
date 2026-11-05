@@ -6,6 +6,8 @@ import re
 import shutil
 import socket
 import subprocess
+import hashlib
+import uuid
 from .bitbang_relay import BitbangRelay
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +17,32 @@ from .project import load_manifest
 from .quality import read_report
 from .td import _tcl_braced, find_td_command
 from .terminal import write_json
+
+
+def validate_svf_payload(bit: Path, svf: Path) -> dict:
+    """Bind the actual JTAG configuration scan to the validated Anlogic image.
+
+    SVF TDI hexadecimal is LSB first. The .bit binary body is MSB first;
+    reverse both byte order and bits within each byte before comparing.
+    Header-only build metadata changes may legitimately keep the same payload.
+    """
+    scans = re.findall(r'\bSDR\s+(\d+)\s+TDI\s*\(([0-9a-fA-F\s]+)\)',
+                       svf.read_text(encoding='ascii'))
+    if not scans:
+        raise ValueError('SVF has no configuration scan')
+    bits, encoded = max(scans, key=lambda row: int(row[0]))
+    bits = int(bits)
+    data = bytes.fromhex(''.join(encoded.split()))
+    if bits < 1024 or bits % 8 or len(data) * 8 != bits:
+        raise ValueError('SVF configuration scan length is invalid')
+    reverse = bytes(int(f'{value:08b}'[::-1], 2) for value in range(256))
+    payload = data.translate(reverse)[::-1]
+    raw = bit.read_bytes()
+    offset = len(raw) - len(payload)
+    if not raw.startswith(b'# Anlogic ASCII Bitstream') or not 0 < offset <= 4096 or raw[offset:] != payload:
+        raise ValueError('SVF configuration payload does not match the verified bitstream')
+    return {'bits': bits, 'bitstream_body_offset': offset,
+            'sha256': hashlib.sha256(payload).hexdigest()}
 
 
 def probe_chain(host: str, port: int) -> list[int]:
@@ -51,9 +79,9 @@ def probe_chain(host: str, port: int) -> list[int]:
     raise RuntimeError('Unexpected JTAG chain: '+','.join(f'{v:08x}' for v in words))
 
 
-def program_sram(project: Path, *, host: str = '127.0.0.1', port: int = 5555,
+def _program_sram(project: Path, *, host: str = '127.0.0.1', port: int = 5555,
                  _chain_retry: bool = True) -> dict:
-    """Generate vendor SRAM SVF, then execute with strict TDO checking.
+    """Generate and bind vendor SRAM SVF, then execute its TDO checks.
 
     Detect PH1P35 IR8 alone or preceded by Nuclei IR5. OpenOCD adds bypass
     bits as needed. The Nuclei TAP may disappear during reconfiguration;
@@ -90,8 +118,8 @@ def program_sram(project: Path, *, host: str = '127.0.0.1', port: int = 5555,
               'mode':'SRAM only','host':host,'port':port,'bitstream_hashes':hashes,
               'chain':[{'idcode':'10300a6d','irlen':5},{'idcode':'4808f0e7','irlen':8}]}
     write_json(reports/'programming.json',result)
-    svf = project/'build/program-sram.svf'
-    svf.parent.mkdir(exist_ok=True)
+    svf = project/'build/programming'/uuid.uuid4().hex/'program-sram.svf'
+    svf.parent.mkdir(parents=True,exist_ok=False)
     log = ''
     try:
         tool = find_td_command().with_name('bw_commands_prompt.exe')
@@ -103,6 +131,13 @@ def program_sram(project: Path, *, host: str = '127.0.0.1', port: int = 5555,
         log += generated.stdout+generated.stderr
         if generated.returncode or 'ICFORGE_SVF_DONE' not in log or not svf.is_file():
             raise RuntimeError('Vendor SRAM SVF generation failed')
+        result['configuration_payload'] = validate_svf_payload(bit, svf)
+        result['svf_file'] = svf.relative_to(project).as_posix()
+        # The vendor SRAM SVF checks device identity, not configured user logic.
+        # A successful scan must never be presented as functional board signoff.
+        result['validation_scope'] = 'SVF payload binding, live JTAG identity and vendor scan execution'
+        result['configuration_readback_verified'] = False
+        result['functional_acceptance'] = 'pending'
         actual_chain = probe_chain(host,port)
         result['chain'] = [{'idcode':f'{v:08x}','irlen':5 if v==0x10300a6d else 8} for v in actual_chain]
         commands = [f'adapter driver remote_bitbang',f'remote_bitbang host {host}',
@@ -145,3 +180,10 @@ def program_sram(project: Path, *, host: str = '127.0.0.1', port: int = 5555,
         result['finished_at'] = datetime.now(timezone.utc).isoformat()
         write_json(reports/'programming.json',result)
     return result
+
+
+def program_sram(project: Path, *, host: str='127.0.0.1', port: int=5555,
+                 _chain_retry: bool=True) -> dict:
+    from .hardware_lock import board_lease
+    with board_lease(host,port):
+        return _program_sram(project,host=host,port=port,_chain_retry=_chain_retry)

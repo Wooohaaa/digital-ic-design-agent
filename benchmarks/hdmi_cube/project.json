@@ -26,22 +26,14 @@
   "board_io": {
     "I_sys_clk": "I_sys_clk",
     "O_hdmi_data_p[0]": "O_hdmi_data_p[0]",
-    "O_hdmi_data_n[0]": "O_hdmi_data_n[0]",
     "O_hdmi_data_p[1]": "O_hdmi_data_p[1]",
-    "O_hdmi_data_n[1]": "O_hdmi_data_n[1]",
     "O_hdmi_data_p[2]": "O_hdmi_data_p[2]",
-    "O_hdmi_data_n[2]": "O_hdmi_data_n[2]",
-    "O_hdmi_clk_p": "O_hdmi_clk_p",
-    "O_hdmi_clk_n": "O_hdmi_clk_n",
-    "O_hdmi_hpd": "O_hdmi_hpd"
+    "O_hdmi_clk_p": "O_hdmi_clk_p"
   },
   "top_ports": {
     "I_sys_clk": "input",
     "O_hdmi_data_p": "output",
-    "O_hdmi_data_n": "output",
-    "O_hdmi_clk_p": "output",
-    "O_hdmi_clk_n": "output",
-    "O_hdmi_hpd": "output"
+    "O_hdmi_clk_p": "output"
   },
   "unmapped_top_ports": [],
   "td_full_allowed": true,
@@ -61,5 +53,18 @@
       "board/hx1p35a.json",
       "verification/acceptance.py"
     ]
+  },
+  "td_status": "full",
+  "hardware_acceptance": {
+    "required": true,
+    "profile": "hdmi-cube",
+    "device": "Hagibis",
+    "capture_seconds": 12,
+    "settle_seconds": 5
+  },
+  "video_output": {
+    "background_level": 1,
+    "strict_black_parameter": "BACKGROUND_LEVEL=0",
+    "qualification": "Near-black compatibility mode; strict RGB=0 is not qualified on the current receiver"
   }
 }

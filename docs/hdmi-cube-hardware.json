@@ -1,0 +1,48 @@
+{
+  "status": "pass",
+  "board": "HX1P35A / PH1P35MDG324",
+  "receiver": "Hagibis",
+  "background_rgb": [
+    1,
+    1,
+    1
+  ],
+  "cube_rgb": [
+    40,
+    220,
+    255
+  ],
+  "strict_black_qualified": false,
+  "limitation": "RGB=0 loses receiver lock on this chain; the electrical or receiver-specific cause remains unproven.",
+  "trials": [
+    {
+      "status": "pass",
+      "started_at": "2026-11-05T14:48:28.956221+00:00",
+      "finished_at": "2026-11-05T14:48:40.209269+00:00",
+      "capture_seconds": 14,
+      "settle_seconds": 5,
+      "sample_count": 18,
+      "valid_frames": 18,
+      "distinct_pose_buckets": 8,
+      "bitstream_hashes": {
+        "td/runs/run_20261105_224647_820245/hdmi_cube_full_Runs/phy_1/hdmi_cube_full.bit": "8a91ebb24042e39ec3d17c9442c25864391914f8ec6232cd021def545b698431"
+      },
+      "programming_report_sha256": "248eea8049483996d564da02b1f92bb8fe9e2891c8e7b5ad0d2de3142d6cef7d"
+    },
+    {
+      "status": "pass",
+      "started_at": "2026-11-05T14:50:56.044005+00:00",
+      "finished_at": "2026-11-05T14:51:11.260464+00:00",
+      "capture_seconds": 20,
+      "settle_seconds": 5,
+      "sample_count": 30,
+      "valid_frames": 30,
+      "distinct_pose_buckets": 8,
+      "bitstream_hashes": {
+        "td/runs/run_20261105_224647_820245/hdmi_cube_full_Runs/phy_1/hdmi_cube_full.bit": "8a91ebb24042e39ec3d17c9442c25864391914f8ec6232cd021def545b698431"
+      },
+      "programming_report_sha256": "9143d1e195178d3a7ecb4c3e903ecf18bb37927c4108941797c6022545feec4a"
+    }
+  ],
+  "reports": "The delivery ZIP includes raw captures, sampled frames and current reports/hardware-video.json."
+}

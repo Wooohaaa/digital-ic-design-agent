@@ -219,6 +219,10 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
     verified_inputs = simulation_input_hashes(project,manifest)
     build_inputs = input_hashes(project,manifest)
     report_hashes = {name:sha(project/name) for name in ('reports/simulation.json','reports/td.json') if (project/name).is_file()}
+    hardware_required=not simulation_only and manifest.get('hardware_acceptance',{}).get('required') is True
+    if hardware_required:
+        for name in ('reports/hardware-video.json','reports/programming.json'):
+            report_hashes[name]=sha(project/name)
     target = project / "deliverables"
     target.mkdir(exist_ok=True)
     artifact = target / f"{manifest['project']}-{'simulation' if simulation_only else 'delivery'}.zip"
@@ -243,7 +247,11 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
                 for path in root.rglob("*"):
                     if path.is_file() and path.name != "simulation.vvp" and path.suffix.lower() != ".log":
                         relative = path.relative_to(project)
-                        if path.suffix.lower() == '.json' and folder == 'reports':
+                        # These reports are fingerprinted as literal bytes by
+                        # the physical acceptance chain. Reformatting JSON (or
+                        # normalizing Windows CRLF) invalidates that evidence.
+                        bound_report=relative.as_posix() in {'reports/hardware-video.json','reports/programming.json'}
+                        if path.suffix.lower() == '.json' and folder == 'reports' and not bound_report:
                             archive.writestr(relative.as_posix(), json.dumps(json.loads(portable_text(path)), ensure_ascii=False, indent=2) + "\n")
                         else:
                             archive.write(path, relative.as_posix())
@@ -253,7 +261,13 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
                 archive.write(path, path.relative_to(project).as_posix())
         archive.write(project / "project.json", "project.json")
         archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':build_inputs,'bitstreams':td_result.get('bitstream_hashes',{}),
-            'engineering_signoff':review['engineering_signoff'],'required_open_items':review['required_open_items']},indent=2))
+            'engineering_signoff':review['engineering_signoff'],'required_open_items':review['required_open_items'],
+            'hardware_report_sha256':report_hashes.get('reports/hardware-video.json')},indent=2))
+        if hardware_required:
+            programming=json.loads((project/'reports/programming.json').read_text(encoding='utf-8'))
+            svf=(project/programming['svf_file']).resolve()
+            if project.resolve() not in svf.parents:raise ValueError('Programmed SVF escapes project')
+            archive.write(svf,svf.relative_to(project).as_posix())
         if selected_run and selected_run.is_dir():
             for path in selected_run.rglob("*.al"):
                 if path.is_file():
@@ -298,6 +312,11 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             valid,reason=implementation_valid(project,current_manifest,td_result)
             if not valid:
                 raise ValueError('Delivery implementation evidence rejected: '+reason)
+        if hardware_required:
+            from .video_hardware import evidence_valid
+            hardware=json.loads((project/'reports/hardware-video.json').read_text(encoding='utf-8'))
+            valid,reason=evidence_valid(project,hardware)
+            if not valid:raise ValueError('Delivery hardware evidence rejected: '+reason)
         with zipfile.ZipFile(pending) as archive:
             for name,expected in verified_inputs.items():
                 if name.startswith('@'):
@@ -307,6 +326,10 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             for name,expected in td_result.get('bitstream_hashes',{}).items():
                 if hashlib.sha256(archive.read(name)).hexdigest() != expected:
                     raise ValueError(f'Archived bitstream differs: {name}')
+            if hardware_required:
+                for name,expected in hardware['artifacts'].items():
+                    if hashlib.sha256(archive.read(name)).hexdigest()!=expected:
+                        raise ValueError(f'Archived hardware capture differs: {name}')
         os.replace(pending,artifact)
     finally:
         pending.unlink(missing_ok=True)
@@ -339,6 +362,12 @@ def parser() -> argparse.ArgumentParser:
 
     verify = commands.add_parser("verify", help="运行自检 testbench 并保存报告")
     verify.add_argument("project")
+    video = commands.add_parser('video-hardware',help='终端采集 HDMI，并用独立几何参考验证实板立方体旋转')
+    video.add_argument('project')
+    video.add_argument('--device',default='Hagibis')
+    video.add_argument('--seconds',type=int,default=12)
+    video.add_argument('--settle',type=int,default=5)
+    video.add_argument('--program',action='store_true',help='先将已通过门禁的位流下载到 SRAM')
 
     lint = commands.add_parser('lint',help='严格 Verilator RTL lint；缺少工具时明确阻塞')
     lint.add_argument('project')
@@ -357,6 +386,8 @@ def parser() -> argparse.ArgumentParser:
     package.add_argument('--simulation-only',action='store_true')
     flow=commands.add_parser('flow',help='verify, TD full, and evidence-gated delivery')
     flow.add_argument('project')
+    flow.add_argument('--hardware-video',action='store_true',help='TD 后下载到 SRAM、采集 HDMI 并验证旋转，再交付')
+    flow.add_argument('--device',default='Hagibis')
     cpu=commands.add_parser('cpu-design',help='generate/repair RV32I through selected model backend and independent verifier')
     cpu.add_argument('project')
     cpu.add_argument('--architecture',choices=('single','multi','pipeline'),required=True)
@@ -412,6 +443,12 @@ def main(argv: list[str] | None = None) -> int:
             project = create_project(args.project, Path(args.directory) / args.project)
             print(f"已创建工程：{project}")
             return 0
+        if args.command=='video-hardware':
+            from .video_hardware import hardware_run
+            report=hardware_run(Path(args.project),device=args.device,seconds=args.seconds,
+                                settle=args.settle,program=args.program)
+            print(json.dumps(report,ensure_ascii=False,indent=2))
+            return 0 if report['status']=='pass' else 1
         if args.command=='cpu-design':
             from .cpu_agent import design_cpu
             if not 0<=args.repair_rounds<=5:raise ValueError('repair-rounds must be 0..5')
@@ -506,7 +543,12 @@ def main(argv: list[str] | None = None) -> int:
             result=verify_project(project)
             if result.status!='pass':return 1
             code=do_td(project,'full',None)
-            return code if code else do_package(project)
+            if code:return code
+            if args.hardware_video:
+                from .video_hardware import hardware_run
+                report=hardware_run(project,device=args.device,program=True)
+                if report['status']!='pass':return 1
+            return do_package(project)
         raise ValueError(f"不支持的命令：{args.command}")
     except Exception as exc:
         print(f"错误：{exc}", file=sys.stderr)

@@ -747,6 +747,12 @@ class ForgeApp(App):
                 arguments["brief"] = rest.removeprefix("--full ")
             elif action in ("package", "review"):
                 arguments["simulation_only"] = "--simulation-only" in tokens
+            elif action=='video-hardware':
+                arguments['program']='--program' in tokens
+                if '--device' in tokens:
+                    index=tokens.index('--device')
+                    if index+1>=len(tokens):raise ValueError('--device 后需要采集设备名。')
+                    arguments['device']=tokens[index+1]
             plan = make_plan(self.workspace, self.settings, action, arguments, self.selected)
             await self.offer_plan(plan)
 

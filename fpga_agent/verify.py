@@ -108,7 +108,14 @@ def verify_project(project: Path, timeout: int = 120) -> SimulationResult:
     output_dir = project / "build"
     output_dir.mkdir(exist_ok=True)
     executable = output_dir / "simulation.vvp"
-    command = [iverilog, "-g2012", "-grelative-include", "-I", str(project), "-Wall", "-s", manifest["testbench_top"], "-o", str(executable)]
+    defines = verification.get("verilog_defines", []) if isinstance(verification, dict) else []
+    if not isinstance(defines, list) or any(
+        not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", name)
+        for name in defines
+    ):
+        raise ValueError("verification.verilog_defines must be a list of Verilog macro identifiers")
+    command = [iverilog, "-g2012", "-grelative-include", "-I", str(project), "-Wall", "-s", manifest["testbench_top"],
+               *[f"-D{name}" for name in defines], "-o", str(executable)]
     command.extend(str(p) for p in all_sources)
     started = datetime.now(timezone.utc)
     start_clock = __import__("time").monotonic()

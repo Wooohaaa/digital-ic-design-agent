@@ -302,6 +302,17 @@ class PersistentTaskTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(completion_gate(self.workspace, task)[0])
 
 
+class HardwareCompletionTests(unittest.TestCase):
+    def test_implemented_project_with_hardware_requirement_cannot_finish_without_measurements(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace=Workspace(Path(directory));project=workspace.root/'demo';project.mkdir()
+            (project/'project.json').write_text(json.dumps({'hardware_acceptance':{'required':True,'profile':'hdmi-cube'}}))
+            with patch('fpga_agent.autonomy.evidence',return_value={'simulation':'current','implementation':'current'}), \
+                 patch('fpga_agent.video_hardware.evidence_valid',return_value=(False,'no rotating capture')):
+                valid,reason=completion_gate(workspace,{'target':'delivery','project':'demo'})
+            self.assertFalse(valid);self.assertIn('no rotating capture',reason)
+
+
 class DetachedTaskIntegrationTests(unittest.TestCase):
     def test_detached_worker_replans_from_real_tool_evidence_and_completes(self):
         local = Path(__file__).resolve().parents[1] / ".tools/icarus/bin/iverilog.exe"

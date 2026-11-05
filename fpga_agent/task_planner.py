@@ -47,6 +47,8 @@ in the supplied schema. design/cpu-design generate and repair candidates; verify
 td implements; package archives; review inspects engineering findings.
 init creates a project template; synth runs TD synthesis; flow runs verify, TD and package;
 tinyllm prepares/verifies the fixed TinyStories260K workload; suite runs the prepared CPU regressions.
+video-hardware captures an already programmed HDMI cube and checks independent geometry and rotation.
+Use it only after current payload-bound programming evidence exists. It does not write hardware.
 Tool failures are observations: diagnose them and choose a meaningful repair, never repeat unchanged failures.
 Read-only tools: inspect requires a concrete text file path (not empty or a directory), with
 1-based offset/limit (max 200 lines); search finds literal query

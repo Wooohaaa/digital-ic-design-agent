@@ -381,12 +381,23 @@ def completion_gate(workspace: Workspace, task: dict) -> tuple[bool, str]:
         return False, "实现证据尚未通过或已过期。"
     from .evidence import input_hashes, sha, simulation_input_hashes
     manifest = read_json(project / "project.json", {})
+    hardware_required=manifest.get('hardware_acceptance',{}).get('required') is True
+    if hardware_required:
+        if manifest.get('hardware_acceptance',{}).get('profile')!='hdmi-cube':
+            return False,'工程要求的实板验收 profile 尚无完成检查器。'
+        from .video_hardware import evidence_valid
+        valid,reason=evidence_valid(project,read_json(project/'reports/hardware-video.json',{}))
+        if not valid:return False,'实板验收未完成：'+reason
     artifact = project / "deliverables" / f"{manifest.get('project')}-delivery.zip"
     try:
         if artifact.with_suffix(".zip.sha256").read_text(encoding="utf-8").split()[0] != sha(artifact):
             return False, "交付 ZIP 指纹不匹配。"
         with zipfile.ZipFile(artifact) as archive:
             delivery = json.loads(archive.read("delivery.json"))
+            if hardware_required:
+                recorded=delivery.get('hardware_report_sha256')
+                if recorded!=sha(project/'reports/hardware-video.json') or hashlib.sha256(archive.read('reports/hardware-video.json')).hexdigest()!=recorded:
+                    return False,'交付包实板验收证据已过期。'
             td = read_json(project / "reports/td.json", {})
             if delivery.get("kind") != "implemented" or delivery.get("inputs") != input_hashes(project, manifest):
                 return False, "交付包对应的工程输入已过期。"
