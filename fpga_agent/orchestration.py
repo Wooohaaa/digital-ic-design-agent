@@ -14,6 +14,7 @@ import time
 from pathlib import Path, PurePosixPath
 
 from .agent_backends import BACKENDS, Events, available, build_command, environment
+from .claude_gateway import ClaudeGateway
 from .terminal import ProcessRunner, read_json, redact, timestamp, write_json
 
 ASSIGNMENT = '.icforge-assignment.md'
@@ -315,7 +316,7 @@ class Orchestrator:
             return
         assignment=self.prompt(batch,job)
         (worktree/ASSIGNMENT).write_text(assignment,encoding='utf-8')
-        job.update(status='running',attempts=job.get('attempts',0)+1,started_at=timestamp())
+        job.update(status='running',attempts=job.get('attempts',0)+1,started_at=timestamp(),error=None)
         attempt=record/f"attempt-{job['attempts']}"
         attempt.mkdir(exist_ok=True)
         (attempt/'assignment.txt').write_text(redact(assignment,dict(os.environ)),encoding='utf-8')
@@ -324,10 +325,20 @@ class Orchestrator:
         self.runners[job['id']]=runner
         self.save(batch)
         env=environment(dict(os.environ),self.engine.task['settings'].get('base_url',''))
+        gateway=None
         try:
             argv,overrides=build_command(job['executor'],worktree,attempt,role=job['role'],
                 model=self.config.get('models',{}).get(job['executor'],''),session_id=job.get('session_id',''))
+            if job['executor']=='claude':
+                gateway=ClaudeGateway.configured(env)
+                if gateway:
+                    overrides.update(gateway.start())
+                    settings_path=attempt/'gateway-settings.json'
+                    write_json(settings_path,{'env':{key:overrides[key] for key in ('ANTHROPIC_BASE_URL','ANTHROPIC_AUTH_TOKEN','CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC')}})
+                    argv+=['--settings',str(settings_path)]
         except (ValueError,OSError) as exc:
+            if gateway:
+                gateway.close()
             job.update(status='failed',error=str(exc))
             self.runners.pop(job['id'],None)
             self.save(batch)
@@ -379,6 +390,8 @@ class Orchestrator:
                 job.update(status='interrupted',error='主管 worker 中断。')
             self.engine.task.setdefault('child_pids',{}).pop(job['id'],None)
             self.runners.pop(job['id'],None)
+            if gateway:
+                gateway.close()
             self.save(batch)
 
     def accept_changes(self,batch,job,worktree,record):

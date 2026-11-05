@@ -24,6 +24,8 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(110,40)):
             await app.submit_command('/mode orchestrate')
             await app.submit_command('/agents 2 codex')
+            await app.submit_command('/agent-model opencode opencode/deepseek-v4.1-flash-free')
+            self.assertEqual(app.workspace.settings().agent_opencode_model,'opencode/deepseek-v4.1-flash-free')
             self.assertEqual(app.workspace.settings().execution,'orchestrate')
             self.assertEqual(app.workspace.settings().agent_workers,'2')
             await app.submit_command('并行实现两个模块并审查')
@@ -31,11 +33,14 @@ class TerminalUITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(argv[argv.index('--mode')+1],'orchestrate')
             self.assertEqual(argv[argv.index('--target')+1],'workspace')
             self.assertEqual(argv[argv.index('--max-agents')+1],'2')
+            self.assertIn('opencode=opencode/deepseek-v4.1-flash-free',argv)
             self.assertFalse(list((app.workspace.state/'tasks').glob('*/task.json')))
             await app.submit_command('/mode engineer')
             await app.submit_command('/orchestrate --workspace 修复测试')
             self.assertIn('修复测试',app.pending.commands[0])
             self.assertEqual(app.pending.commands[0][app.pending.commands[0].index('--mode')+1],'orchestrate')
+            await app.submit_command('/agent-model opencode native')
+            self.assertEqual(app.workspace.settings().agent_opencode_model,'')
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

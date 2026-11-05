@@ -525,7 +525,7 @@ class ForgeApp(App):
             allowed = {"/tasks", "/pause", "/stop", "/steer", "/status", "/help", "/?", "/connect",
                        "/theme", "/logo", "/model", "/provider", "/open", "/files", "/artifacts",
                        "/export", "/diff", "/quit", "/exit", "/cancel", "/auto",
-                       "/skills", "/skill", "/recall", "/context", "/agents", "/mode"}
+                       "/skills", "/skill", "/recall", "/context", "/agents", "/mode", "/agent-model"}
             if text.partition(" ")[0] not in allowed:
                 raise ValueError("长期任务正在操作工作区。用 /pause 暂停，或直接输入补充要求。")
         if not text.startswith("/"):
@@ -543,7 +543,7 @@ class ForgeApp(App):
         command, _, rest = text.partition(" ")
         rest = rest.strip()
         tokens = [next((part for part in match if part), "") for match in re.findall(r'"([^"]*)"|\'([^\']*)\'|(\S+)', rest)] if rest else []
-        if command in {'/mode','/agents','/orchestrate','/ask'}:
+        if command in {'/mode','/agents','/orchestrate','/ask','/agent-model'}:
             from .agent_backends import available
             if command=='/mode':
                 if rest:
@@ -566,10 +566,17 @@ class ForgeApp(App):
                 catalog=available()
                 body='\n'.join(f"- {item['name']}: {'已安装' if item['available'] else '未安装'}" for item in catalog)
                 body+=f'\n\n后续任务最大并发 {self.settings.agent_workers}；启用 {self.settings.agent_backends}。'
+                body+='\n'+ '\n'.join(f"- {name} 模型：{getattr(self.settings,'agent_'+name+'_model') or 'native'}" for name in ('codex','claude','opencode'))
                 tasks=task_store.list()
                 if tasks:
                     body+='\n\n```json\n'+json.dumps(tasks[0].get('delegations',[]),ensure_ascii=False,indent=2)+'\n```'
                 await self.add_message('assistant',body)
+            elif command=='/agent-model':
+                if len(tokens)!=2 or tokens[0] not in {'codex','claude','opencode'} or len(tokens[1])>200:
+                    raise ValueError('/agent-model codex|claude|opencode 模型名；native 恢复 CLI 原生配置。')
+                setattr(self.settings,'agent_'+tokens[0]+'_model','' if tokens[1]=='native' else tokens[1])
+                self.workspace.save_settings(self.settings)
+                await self.add_message('system',f'{tokens[0]} 后续任务模型：{tokens[1]}。')
             elif command=='/ask':
                 if not rest:
                     raise ValueError('/ask 问题。')
@@ -758,6 +765,9 @@ class ForgeApp(App):
                 '--max-agents',self.settings.agent_workers,'--agents',self.settings.agent_backends]
         if target=='workspace' and (self.workspace.root/'.icforge/checks.json').is_file():
             argv += ['--checks-file','.icforge/checks.json']
+        for name in ('codex','claude','opencode'):
+            if model:=getattr(self.settings,'agent_'+name+'_model'):
+                argv += ['--agent-model',name+'='+model]
         if project:
             argv += ["--project", project.relative_to(self.workspace.root).as_posix()]
         return TaskPlan("启动长期任务", [argv])
@@ -1097,7 +1107,7 @@ class ForgeApp(App):
     async def picked_command(self, command: str | None) -> None:
         if not command:
             return
-        if command in ("/init", "/cpu", "/design", "/open", "/model", "/provider", "/export", "/orchestrate", "/ask"):
+        if command in ("/init", "/cpu", "/design", "/open", "/model", "/provider", "/export", "/orchestrate", "/ask", "/agent-model"):
             self.query_one("#prompt", Prompt).load_text(command + " ")
             self.query_one("#prompt").focus()
         else:

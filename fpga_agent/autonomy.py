@@ -727,7 +727,7 @@ def dispatch(args) -> int:
                 checks=[{'name':'unittest','argv':['python','-m','unittest','discover','-s','tests','-v']}]
             else:
                 raise ValueError('workspace 目标请用 --checks-file 声明验收命令。')
-        models={}
+        models={name:value for name in BACKENDS if (value:=getattr(settings,'agent_'+name+'_model'))}
         for mapping in args.agent_model:
             name,separator,model=mapping.partition('=')
             if not separator or not model:

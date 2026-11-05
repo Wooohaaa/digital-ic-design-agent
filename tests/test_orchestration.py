@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fpga_agent.agent_backends import Events, build_command, environment
+from fpga_agent.agent_backends import Events, build_command, environment, command_prefix
 from fpga_agent.autonomy import TaskEngine, TaskStore, completion_gate
 from fpga_agent.orchestration import Orchestrator, git, validate_jobs, verify_workspace, workspace_gate
 from fpga_agent.terminal import Workspace, read_json, write_json
@@ -62,6 +62,17 @@ class ScriptedOrchestrationEngine(TrackingEngine):
 
 
 class PlanAndAdapterTests(unittest.TestCase):
+    @unittest.skipUnless(os.name=='nt','Windows npm shims')
+    def test_claude_npm_native_binary_and_legacy_js_are_detected_without_shell(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); shim=root/'claude.cmd'; shim.write_text('fixture')
+            package=root/'node_modules/@anthropic-ai/claude-code'; (package/'bin').mkdir(parents=True)
+            native=package/'bin/claude.exe'; native.write_bytes(b'MZfixture')
+            with patch('fpga_agent.agent_backends.shutil.which',side_effect=lambda name: str(shim) if name=='claude' else sys.executable):
+                self.assertEqual(command_prefix('claude'),[str(native)])
+                native.unlink(); (package/'cli.js').write_text('fixture')
+                self.assertEqual(command_prefix('claude'),[sys.executable,str(package/'cli.js')])
+
     def test_dag_validation_cycles_unavailable_agents_and_scope_collisions(self):
         jobs=validate_jobs([job('a',files=['rtl/']),job('b',files=['rtl/core.v']),
                            job('review',files=[],role='review',deps=['a','b'])],['codex'],CATALOG)
@@ -202,6 +213,7 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         batch=read_json(self.engine.directory/'delegations'/paused['batch_id']/'batch.json')
         self.assertEqual(batch['jobs'][0]['attempts'],1)
         self.assertEqual(batch['jobs'][1]['attempts'],2)
+        self.assertIsNone(batch['jobs'][1]['error'])
         self.assertEqual(restarted.task['child_pids'],{})
 
     async def test_manual_change_blocks_import_and_retry_is_idempotent(self):

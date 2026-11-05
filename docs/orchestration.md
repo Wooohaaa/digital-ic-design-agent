@@ -20,6 +20,7 @@ IC Forge 的 `engineer` 模式调用内置 IC 工程工具；新增 `orchestrate
 
 ```text
 /agents 3 codex,claude,opencode
+/agent-model opencode opencode/deepseek-v4.1-flash-free
 /mode orchestrate
 设计目标、验收要求和允许修改的范围……
 /agents
@@ -29,6 +30,8 @@ IC Forge 的 `engineer` 模式调用内置 IC 工程工具；新增 `orchestrate
 ```
 
 启用编排后，普通输入直接作为持久任务目标；运行期间普通输入追加到任务要求。`/ask 问题` 使用原来的对话入口。`/mode engineer` 切回工程模式。`Shift+Tab` 的 Plan/Build 是另一个维度：Plan 先展示启动计划，确认执行后才启动。切换模式和并发设置只影响后续新任务。
+
+`/agent-model 执行者 模型名` 保存当前工作区的执行者模型，`/agent-model claude native` 恢复 CLI 原生配置。`/agents` 同时展示模型配置。TUI 启动的任务及 CLI `task start` 都继承这些默认值，命令行 `--agent-model` 可覆盖。此配置独立于主管的 `/model`，也不会改写 OpenCode 的全局 SenseNova 等现有配置。免费模型名称和可用性会变化，先用 `opencode models opencode` 查询。
 
 未选 IC 工程时默认采用 `workspace` 验收；选中 IC 工程时默认要求完整工程交付，可用 `/orchestrate --simulation-only 目标` 只验收仿真。`--workspace` 显式选择通用工作区。IC 目标仍须通过原有仿真/实现/交付证据门禁。
 
@@ -79,7 +82,7 @@ icforge task resume
 
 自动回归包含真实 Git worktree 与受控子进程，覆盖并发、依赖、越范围补丁拒绝、逻辑失败、超时、暂停/恢复、用户修改保护、导入恢复、固定验收及指纹过期。受控执行者用于验证协调机制，不能代替真实服务验证。
 
-本机真实 Codex 测试记录见下文；Claude Code 本机尚未安装，OpenCode 已检测到程序，但本轮未验证其在线账号调用。CLI 适配器通过命令参数与事件解析回归，不代表三种后端均已完成真实端到端验收。
+下面记录初版 Codex 测试；新增 OpenCode / Claude Code 联动的配置及实测见 [多 CLI 联动](backend-linkage.md)。
 
 ### 2026-11-05 真实 Codex 验收
 

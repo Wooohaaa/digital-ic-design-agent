@@ -1,0 +1,87 @@
+{
+  "date": "2026-11-05",
+  "task_id": "34e94cbcf812",
+  "status": "completed",
+  "iterations": 4,
+  "supervisor": "Codex native login",
+  "models": {
+    "opencode": "opencode/deepseek-v4.1-flash-free",
+    "claude": "x-deepseek-v4.1-flash"
+  },
+  "jobs": [
+    {
+      "id": "add-impl",
+      "executor": "opencode",
+      "role": "implement",
+      "status": "completed",
+      "depends_on": [],
+      "changed_files": [
+        "calc/add.py"
+      ],
+      "attempts": 2,
+      "started_at": "2026-11-05T04:31:58.383186+00:00",
+      "finished_at": "2026-11-05T04:32:17.616222+00:00",
+      "exit_code": 0,
+      "configured_model": "opencode/deepseek-v4.1-flash-free"
+    },
+    {
+      "id": "multiply-impl",
+      "executor": "claude",
+      "role": "implement",
+      "status": "completed",
+      "depends_on": [],
+      "changed_files": [
+        "calc/multiply.py"
+      ],
+      "attempts": 3,
+      "started_at": "2026-11-05T04:35:07.219836+00:00",
+      "finished_at": "2026-11-05T04:37:56.427092+00:00",
+      "exit_code": 0,
+      "configured_model": "x-deepseek-v4.1-flash"
+    },
+    {
+      "id": "impl-review",
+      "executor": "codex",
+      "role": "review",
+      "status": "completed",
+      "depends_on": [
+        "add-impl",
+        "multiply-impl"
+      ],
+      "changed_files": [],
+      "attempts": 1,
+      "started_at": "2026-11-05T04:37:57.379012+00:00",
+      "finished_at": "2026-11-05T04:38:20.932097+00:00",
+      "exit_code": 0,
+      "configured_model": "native"
+    }
+  ],
+  "claude_observed_model": [
+    "x-deepseek-v4.1-flash"
+  ],
+  "claude_observed_tools": [
+    "Glob",
+    "Read",
+    "Write"
+  ],
+  "protected_files_match_initial_sha256": {
+    "calc/__init__.py": true,
+    "tests/test_pair.py": true
+  },
+  "completion_gate": true,
+  "host_check": {
+    "status": "pass",
+    "exit_codes": [
+      0
+    ]
+  },
+  "independent_rerun": {
+    "exit_code": 0,
+    "output": "test_add (test_pair.ArithmeticTests.test_add) ... ok\ntest_multiply (test_pair.ArithmeticTests.test_multiply) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+  },
+  "test_notes": [
+    "Resumed after compatibility repair and an operator model change; retained the completed OpenCode node.",
+    "Final Claude Code implementation used DeepSeek, not a Claude model.",
+    "This is a functional orchestration fixture, not a performance comparison or complex IC validation."
+  ]
+}

@@ -20,6 +20,10 @@ def command_prefix(name: str) -> list[str] | None:
     if os.name != 'nt' or path.suffix.lower() not in {'.cmd','.bat','.ps1'}:
         return [str(path)]
     # Avoid cmd.exe quoting/execution of batch shims, especially with model text.
+    if name == 'claude':
+        native = path.parent/'node_modules/@anthropic-ai/claude-code/bin/claude.exe'
+        if native.is_file():
+            return [str(native)]
     packages = {'codex':'@openai/codex/bin/codex.js',
                 'claude':'@anthropic-ai/claude-code/cli.js','opencode':'opencode-ai/bin/opencode'}
     entry = path.parent/'node_modules'/packages[name]

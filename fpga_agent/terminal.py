@@ -46,6 +46,7 @@ COMMANDS = {
     "/mode": "执行模式：engineer / orchestrate（指挥外部 agent）",
     "/orchestrate": "编排目标；--workspace 为代码仓库验收，--simulation-only 仅仿真",
     "/agents": "查看外部 agent；/agents 2 codex 设置后续并发上限与执行者",
+    "/agent-model": "执行者模型：/agent-model opencode opencode/deepseek-v4.1-flash-free；native 使用原生配置",
     "/ask": "在编排模式下进行一次普通问答",
     "/new": "新建会话", "/resume": "恢复会话", "/clear": "清空当前对话",
     "/export": "导出 Markdown 会话", "/cancel": "取消当前任务", "/quit": "退出",
@@ -108,6 +109,9 @@ class Settings:
     execution: str = 'engineer'
     agent_workers: str = '3'
     agent_backends: str = 'codex,claude,opencode'
+    agent_codex_model: str = ''
+    agent_claude_model: str = ''
+    agent_opencode_model: str = ''
 
 
 @dataclass

@@ -49,6 +49,8 @@ icforge task logs
 
 主管模型和执行者分别配置；`native` 使用本机 Codex 的模型配置与登录。进入编排模式后直接输入目标即可启动持久任务，支持 `/pause`、`/continue` 和追加要求。工作区须为有提交记录的 Git 仓库；通用工程应预先声明验收命令。完整配置、混用多个 CLI、恢复规则及实测范围见 [Agent 编排指南](docs/orchestration.md)。
 
+可用 `/agent-model opencode opencode/deepseek-v4.1-flash-free` 给执行者选择免费模型，`/agent-model claude x-deepseek-v4.1-flash` 给 Claude Code 选择已配置网关的 DeepSeek。Windows 新版 Claude Code 原生程序识别与可选 Messages 网关兼容层见 [多 CLI 联动](docs/backend-linkage.md)。
+
 ## 模型与验证
 
 TinyStories260K 已在 HX1P35A 实板通过完整 CRC、1,536 个 logits 和生成 token 对比。额外三轮板上生成也逐 token 通过独立参考校验（每轮 16 个新 token，以下为达到长度上限时的原始片段）：
