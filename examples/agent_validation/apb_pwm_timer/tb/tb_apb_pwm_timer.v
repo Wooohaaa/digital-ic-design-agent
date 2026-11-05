@@ -15,10 +15,12 @@ module tb_apb_pwm_timer;
     reg [1:0] model_control = 0;
     reg model_pending = 0;
     reg [31:0] model_count = 0;
+    reg wrapped_this_edge = 0;
     integer j;
     integer highs;
 
     always @(posedge pclk) begin
+        wrapped_this_edge = 0;
         if (!presetn) begin
             model_period = 8;
             model_duty = 4;
@@ -30,6 +32,7 @@ module tb_apb_pwm_timer;
                 if (model_count >= model_period - 1) begin
                     model_count = 0;
                     model_pending = 1;
+                    wrapped_this_edge = 1;
                 end else model_count = model_count + 1;
             end
             if (psel && penable && pready && pwrite && !pslverr) begin
@@ -37,7 +40,7 @@ module tb_apb_pwm_timer;
                     8'h00: model_period = (pwdata < 2) ? 2 : pwdata;
                     8'h04: model_duty = pwdata;
                     8'h08: model_control = pwdata[1:0];
-                    8'h0c: if (pwdata[0]) model_pending = 0;
+                    8'h0c: if (pwdata[0] && !wrapped_this_edge) model_pending = 0;
                     default: begin end
                 endcase
             end
@@ -60,6 +63,21 @@ module tb_apb_pwm_timer;
             #1;
             if (pready !== 1'b1) $fatal(1, "PREADY did not complete access");
             if (pslverr !== expect_error) $fatal(1, "PSLVERR mismatch at write address %02x", address);
+            @(negedge pclk);
+            psel = 0; penable = 0; pwrite = 0;
+        end
+    endtask
+
+    task automatic apb_clear_on_wrap;
+        begin
+            @(negedge pclk);
+            while (!(model_control[0] && model_count == model_period - 2)) @(negedge pclk);
+            psel = 1; penable = 0; pwrite = 1; paddr = 8'h0c; pwdata = 1;
+            @(negedge pclk);
+            penable = 1;
+            @(posedge pclk);
+            #1;
+            if (pslverr !== 1'b0) $fatal(1, "W1C-on-wrap access unexpectedly errored");
             @(negedge pclk);
             psel = 0; penable = 0; pwrite = 0;
         end
@@ -113,10 +131,11 @@ module tb_apb_pwm_timer;
         apb_read(8'h0c, 1, 0);
         if (irq !== 1'b1) $fatal(1, "enabled timer did not assert IRQ after rollover");
         apb_write(8'h0c, 1, 0);
-        apb_read(8'h0c, 0, 0);
         if (irq !== 1'b0) $fatal(1, "W1C did not clear IRQ");
 
         apb_write(8'h08, 0, 0);
+        apb_write(8'h0c, 1, 0);
+        apb_read(8'h0c, 0, 0);
         measure_pwm(8, 0);
         apb_write(8'h04, 0, 0);
         apb_write(8'h08, 1, 0);
@@ -140,6 +159,18 @@ module tb_apb_pwm_timer;
         apb_write(8'h08, 0, 0);
         apb_read(8'h00, 2, 0);
         apb_read(8'h04, 1, 0);
+
+        // Reinitialize to period=2 and align a W1C access with the wrap edge.
+        @(negedge pclk);
+        presetn = 0; psel = 0; penable = 0; pwrite = 0;
+        repeat (2) @(posedge pclk);
+        #1 presetn = 1;
+        apb_write(8'h00, 2, 0);
+        apb_write(8'h04, 1, 0);
+        apb_write(8'h08, 3, 0);
+        apb_clear_on_wrap();
+        apb_read(8'h0c, 1, 0);
+        if (irq !== 1'b1) $fatal(1, "timer wrap did not win over simultaneous W1C");
 
         $display("CHECK REQ-001 PASS");
         $display("CHECK REQ-002 PASS");

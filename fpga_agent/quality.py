@@ -36,22 +36,69 @@ def lint_inputs(project: Path, manifest: dict) -> dict:
     return result
 
 
+def _verilator_command() -> list[str]:
+    """Resolve native Verilator or its MSYS2 Perl launcher on Windows."""
+    executable = shutil.which('verilator')
+    if executable:
+        return [executable]
+    if os.name != 'nt':
+        return []
+    for entry in os.environ.get('PATH', '').split(os.pathsep):
+        if not entry:
+            continue
+        launcher = Path(entry) / 'verilator'
+        try:
+            with launcher.open(encoding='utf-8', errors='replace') as stream:
+                is_perl_launcher = launcher.is_file() and 'perl' in stream.readline().lower()
+        except OSError:
+            is_perl_launcher = False
+        if not is_perl_launcher:
+            continue
+        native_binary = Path(entry) / 'verilator_bin.exe'
+        if native_binary.is_file():
+            return [str(native_binary)]
+        perl = shutil.which('perl.exe') or shutil.which('perl')
+        if not perl:
+            # MSYS2 stores Perl beside the `usr` tree while Verilator's script
+            # lives under a subsystem's `bin` directory (e.g. ucrt64/bin).
+            candidate = Path(entry).parent.parent / 'usr' / 'bin' / 'perl.exe'
+            if candidate.is_file():
+                perl = str(candidate)
+        if perl:
+            return [perl, str(launcher)]
+    return []
+
+
+def _verilator_environment(command: list[str]) -> dict[str, str]:
+    env = dict(os.environ)
+    for item in command:
+        candidate = Path(item)
+        if candidate.name.lower() not in {'verilator', 'verilator.exe', 'verilator_bin.exe'}:
+            continue
+        root = candidate.parent.parent / 'share' / 'verilator'
+        if root.is_dir():
+            env['VERILATOR_ROOT'] = str(root)
+            break
+    return env
+
+
 def lint_project(project: Path, timeout: int = 120) -> dict:
     project = project.resolve()
     manifest = load_manifest(project)
     inputs = lint_inputs(project, manifest)
-    tool = shutil.which('verilator')
+    tool = _verilator_command()
     report = {'schema_version':1,'status':'blocked','tool':'Verilator',
               'started_at':datetime.now(timezone.utc).isoformat(),'inputs':inputs,
               'command':[],'returncode':None,'output':'Verilator is not installed or not on PATH.'}
     if tool:
-        command = [tool,'--lint-only','-Wall','--top-module',manifest['top_module'],
+        command = tool + ['--lint-only','-Wall','--top-module',manifest['top_module'],
                    '-I'+str(project), *[str(project / name) for name in manifest['rtl_sources']]]
         report['command'] = command
+        tool_env = _verilator_environment(tool)
         try:
-            version = subprocess.run([tool,'--version'],capture_output=True,text=True,timeout=15,check=False)
+            version = subprocess.run(tool+['--version'],capture_output=True,text=True,timeout=15,check=False,env=tool_env)
             report['tool_version'] = (version.stdout+version.stderr).strip()
-            result = subprocess.run(command,cwd=project,capture_output=True,text=True,timeout=timeout,check=False)
+            result = subprocess.run(command,cwd=project,capture_output=True,text=True,timeout=timeout,check=False,env=tool_env)
             report.update(returncode=result.returncode,output=result.stdout+result.stderr,
                           status='pass' if result.returncode == 0 else 'fail')
             if lint_inputs(project,load_manifest(project)) != inputs:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -14,7 +15,7 @@ from fpga_agent.cli import do_package
 from fpga_agent.project import create_project, load_manifest
 from fpga_agent.evidence import input_hashes, simulation_valid
 from fpga_agent.evidence import sha
-from fpga_agent.quality import lint_project, review_project
+from fpga_agent.quality import _verilator_command, _verilator_environment, lint_project, review_project
 from fpga_agent.verify import verify_project
 
 
@@ -25,7 +26,7 @@ class EngineeringReviewTests(unittest.TestCase):
         self.project=create_project('quality',Path(self.temp.name)/'quality')
 
     def test_missing_lint_tool_is_blocked_not_passed(self):
-        with patch('fpga_agent.quality.shutil.which',return_value=None):
+        with patch('fpga_agent.quality._verilator_command',return_value=[]):
             result=lint_project(self.project)
         self.assertEqual(result['status'],'blocked')
         self.assertIsNone(result['returncode'])
@@ -44,6 +45,22 @@ class EngineeringReviewTests(unittest.TestCase):
         self.assertIn('-Wall',report['command'])
         self.assertNotIn('-Wno-fatal',report['command'])
         self.assertEqual(report['status'],'fail')
+
+    @unittest.skipUnless(os.name=='nt','MSYS2 Verilator launcher is Windows-specific')
+    def test_lint_resolves_extensionless_msys2_perl_launcher(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)/'msys64'
+            bin_dir=root/'ucrt64'/'bin'
+            bin_dir.mkdir(parents=True)
+            (root/'ucrt64'/'share'/'verilator').mkdir(parents=True)
+            launcher=bin_dir/'verilator'
+            launcher.write_text('#!/usr/bin/env perl\n',encoding='utf-8')
+            native=bin_dir/'verilator_bin.exe'
+            native.write_bytes(b'MZfixture')
+            with patch('fpga_agent.quality.shutil.which',return_value=None), patch.dict(os.environ,{'PATH':str(bin_dir)}):
+                self.assertEqual(_verilator_command(),[str(native)])
+            env=_verilator_environment([str(native)])
+            self.assertEqual(env['VERILATOR_ROOT'],str(root/'ucrt64'/'share'/'verilator'))
 
     def test_malformed_report_produces_actionable_blocker(self):
         (self.project/'reports').mkdir(exist_ok=True)

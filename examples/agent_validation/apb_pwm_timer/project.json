@@ -51,7 +51,7 @@
     ]
   },
   "trusted_testbench_hashes": {
-    "tb/tb_apb_pwm_timer.v": "0e7baf70480d8af7c1bf00025af6fca62e259ab0cd75556ea9d2b2891cd98b26"
+    "tb/tb_apb_pwm_timer.v": "e4f414c43a720c9a6addd547d69189f2433470cc5603cfa19a612f8a1697ddc7"
   },
   "checks": [
     "APB setup/access and register map",
