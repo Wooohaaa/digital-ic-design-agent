@@ -83,6 +83,37 @@ def source_hashes(project: Path, manifest: dict) -> dict[str,str]:
     return result
 
 
+def trusted_testbench_valid(project: Path, manifest: dict) -> tuple[bool, str]:
+    """Validate an operator-owned HDL testbench pinned into the project manifest."""
+    verification = manifest.get('verification', {})
+    if not isinstance(verification, dict) or verification.get('kind') != 'trusted-testbench':
+        return False, 'trusted testbench profile is not selected'
+    sources = manifest.get('testbench_sources')
+    trusted = verification.get('trusted_files')
+    hashes = manifest.get('trusted_testbench_hashes')
+    if (not isinstance(sources, list) or not sources
+            or any(not isinstance(name, str) or not name.strip() for name in sources)):
+        return False, 'testbench_sources must be a nonempty list of relative file paths'
+    if len(set(sources)) != len(sources):
+        return False, 'testbench_sources contains duplicate paths'
+    if (not isinstance(trusted, list) or any(not isinstance(name, str) for name in trusted)
+            or trusted != sources):
+        return False, 'trusted testbench file list must exactly match testbench_sources in order'
+    if not isinstance(hashes, dict) or any(not isinstance(name, str) for name in hashes) or set(hashes) != set(sources):
+        return False, 'trusted testbench SHA-256 inventory is incomplete'
+    for name in sources:
+        expected = hashes.get(name)
+        if not isinstance(expected, str) or not re.fullmatch(r'[0-9a-f]{64}', expected):
+            return False, f'trusted testbench hash is invalid: {name}'
+        try:
+            actual = sha(local_file(project, name))
+        except (OSError, ValueError) as exc:
+            return False, f'trusted testbench file is missing or unsafe: {name}: {exc}'
+        if actual != expected:
+            return False, f'trusted testbench changed since its hash was pinned: {name}'
+    return True, 'operator-owned testbench hashes match the manifest'
+
+
 def input_hashes(project: Path,manifest: dict) -> dict[str,str]:
     # Testbenches belong to simulation evidence, not to the synthesized netlist.
     # A stronger verifier can be rerun without rebuilding unchanged hardware.
@@ -125,6 +156,9 @@ def simulation_valid(project: Path,manifest: dict,report: dict) -> tuple[bool,st
         if any(case.get('status') != 'pass' for case in cases):return False,'CPU regression contains failed cases'
         required = set().union(*(run_reference(case).coverage for case in corpus(0)))
         if not required.issubset(set(report.get('instruction_coverage',[]))):return False,'CPU directed functional coverage incomplete'
+    elif manifest.get('verification',{}).get('kind')=='trusted-testbench':
+        trusted, reason = trusted_testbench_valid(project, manifest)
+        if not trusted:return False, reason
     else:
         runtime = report.get('runtime_output')
         if not isinstance(runtime,str) or not re.search(r'(?m)^\s*PASS(?:\b|:)',runtime):return False,'runtime PASS evidence missing'

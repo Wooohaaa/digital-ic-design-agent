@@ -1,0 +1,9 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset initializes empty/full/data state"},
+    {"id": "REQ-002", "description": "Rejects underflow and overflow without corrupting state"},
+    {"id": "REQ-003", "description": "Preserves ordering through pointer wrap and repeated fill/drain"},
+    {"id": "REQ-004", "description": "Correctly handles simultaneous read/write at empty, middle, and full"},
+    {"id": "REQ-005", "description": "Matches a reference queue under deterministic pseudo-random traffic"}
+  ]
+}

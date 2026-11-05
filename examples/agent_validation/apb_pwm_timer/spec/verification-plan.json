@@ -1,0 +1,9 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "APB reads and writes occur in access phase and return the specified registers"},
+    {"id": "REQ-002", "description": "Invalid addresses assert PSLVERR without modifying valid registers"},
+    {"id": "REQ-003", "description": "Timer wraps at PERIOD and PWM duty boundaries are exact"},
+    {"id": "REQ-004", "description": "PWM is low while disabled and honors zero, partial, and full duty"},
+    {"id": "REQ-005", "description": "IRQ pending, enable gating, and W1C status behavior match the cycle model"}
+  ]
+}

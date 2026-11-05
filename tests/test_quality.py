@@ -13,6 +13,7 @@ from unittest.mock import patch
 from fpga_agent.cli import do_package
 from fpga_agent.project import create_project, load_manifest
 from fpga_agent.evidence import input_hashes, simulation_valid
+from fpga_agent.evidence import sha
 from fpga_agent.quality import lint_project, review_project
 from fpga_agent.verify import verify_project
 
@@ -50,6 +51,20 @@ class EngineeringReviewTests(unittest.TestCase):
         result=review_project(self.project)
         self.assertFalse(result['artifact_ready'])
         self.assertTrue(result['next_actions'])
+
+    def test_pinned_hdl_testbench_is_reported_as_independent_verification(self):
+        manifest=load_manifest(self.project)
+        testbench=manifest['testbench_sources'][0]
+        manifest['verification']={'kind':'trusted-testbench','trusted_files':[testbench]}
+        manifest['trusted_testbench_hashes']={testbench:sha(self.project/testbench)}
+        (self.project/'project.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+        simulation={'status':'pass','source_hashes':{},'returncode':0}
+        with patch('fpga_agent.quality.read_report',side_effect=lambda path: simulation if path.name=='simulation.json' else {}), patch('fpga_agent.quality.simulation_valid',return_value=(True,'pass')):
+            review=review_project(self.project,'simulation',write=False)
+        gates={item['id']:item for item in review['gates']}
+        self.assertEqual(review['verification_profile'],'trusted-hdl-testbench')
+        self.assertEqual(gates['DV-002']['status'],'pass')
+        self.assertEqual(gates['DV-003']['status'],'pass')
 
     def require_simulator(self):
         if not shutil.which('iverilog') and not (Path(__file__).resolve().parents[1]/'.tools/icarus/bin/iverilog.exe').exists():

@@ -1,0 +1,8 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Idle polarity and transfer edges are correct in all four CPOL/CPHA modes"},
+    {"id": "REQ-002", "description": "Three bytes per mode transmit MSB first and keep CS active for the complete byte"},
+    {"id": "REQ-003", "description": "Received bytes match an edge-driven independent SPI slave model"},
+    {"id": "REQ-004", "description": "Busy, done, and chip-select return to idle after each transfer"}
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "project": "validation-spi-master",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "spi_master",
+  "testbench_top": "tb_spi_master",
+  "rtl_sources": [
+    "rtl/spi_master.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_spi_master.v"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "start": "input",
+    "tx_data": "input",
+    "rx_data": "output",
+    "busy": "output",
+    "done": "output",
+    "sclk": "output",
+    "mosi": "output",
+    "miso": "input",
+    "cs_n": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "start",
+    "tx_data",
+    "rx_data",
+    "busy",
+    "done",
+    "sclk",
+    "mosi",
+    "miso",
+    "cs_n"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_spi_master.v"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_spi_master.v": "792ee9ef5df15bfece5d69432ab115a5bc479efb70502cd683fd0c5f7932bfc1"
+  },
+  "checks": [
+    "four CPOL/CPHA modes",
+    "MSB-first transmission",
+    "independent receive model",
+    "busy/done/CS timing"
+  ]
+}

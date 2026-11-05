@@ -8,7 +8,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .evidence import hdl_input_hashes, implementation_valid, sha, simulation_valid
+from .evidence import hdl_input_hashes, implementation_valid, sha, simulation_valid, trusted_testbench_valid
 from .project import load_manifest
 
 
@@ -91,10 +91,15 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         '' if valid_sim else 'Run /verify and resolve the first failing counterexample.',['reports/simulation.json'])
     cpu = manifest.get('verification',{}).get('kind') == 'riscv-retire'
     tinyllm = manifest.get('verification',{}).get('kind') == 'tinystories-fp32'
-    independent = cpu or tinyllm
+    trusted_hdl = manifest.get('verification',{}).get('kind') == 'trusted-testbench'
+    trusted_hdl_ok, trusted_hdl_detail = trusted_testbench_valid(project,manifest) if trusted_hdl else (False,'')
+    independent = cpu or tinyllm or (trusted_hdl and trusted_hdl_ok)
     if cpu:
         traceable = valid_sim
         detail = f"Independent retirement/store/memory comparison: {simulation.get('case_count',0)} cases, {simulation.get('seeds',0)} random seeds."
+    elif trusted_hdl:
+        traceable = valid_sim and trusted_hdl_ok
+        detail = trusted_hdl_detail
     else:
         plan = read_report(project / 'spec/verification-plan.json')
         requirements = plan.get('requirements',[])
@@ -146,10 +151,12 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         '' if hardware_ok else 'Program the board and record observed outputs against the hardware acceptance procedure.',
         ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else [],required=False)
     artifact_ready = valid_sim and (scope == 'simulation' or valid_td)
+    profile = ('trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else
+               'trusted-hdl-testbench' if trusted_hdl else 'generated-self-check')
     report = {'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(),
               'project':manifest.get('project',project.name),'scope':scope,
               'artifact_ready':artifact_ready,'engineering_signoff':'not_granted',
-              'verification_profile':'trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else 'generated-self-check',
+              'verification_profile':profile,
               'gates':gates,'next_actions':[gate['next_action'] for gate in gates if gate['status'] != 'pass' and gate['next_action']],
               'required_open_items':sum(gate['required'] and gate['status'] != 'pass' for gate in gates)}
     if write:

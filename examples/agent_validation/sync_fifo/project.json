@@ -1,0 +1,55 @@
+{
+  "project": "validation-sync-fifo",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "sync_fifo",
+  "testbench_top": "tb_sync_fifo",
+  "rtl_sources": [
+    "rtl/sync_fifo.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_sync_fifo.v"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "wr_en": "input",
+    "rd_en": "input",
+    "din": "input",
+    "dout": "output",
+    "full": "output",
+    "empty": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "wr_en",
+    "rd_en",
+    "din",
+    "dout",
+    "full",
+    "empty"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_sync_fifo.v"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_sync_fifo.v": "055f023b046cb60d0e9ec8fe194d5f796e7ab66607edeec34e87f199196e22f6"
+  },
+  "checks": [
+    "reset",
+    "underflow/overflow",
+    "pointer wrap",
+    "simultaneous operations",
+    "deterministic random scoreboard"
+  ]
+}

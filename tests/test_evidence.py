@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from fpga_agent.cpu_bench import trusted_hashes
-from fpga_agent.evidence import EVIDENCE_VERSION, implementation_valid, input_hashes, simulation_input_hashes, simulation_valid, source_hashes, sha
+from fpga_agent.evidence import EVIDENCE_VERSION, implementation_valid, input_hashes, simulation_input_hashes, simulation_valid, source_hashes, sha, trusted_testbench_valid
 from fpga_agent.riscv import corpus, run_reference
 
 
@@ -155,6 +155,54 @@ class EvidenceGateTests(unittest.TestCase):
         valid, reason = implementation_valid(self.project, self.manifest, report)
         self.assertFalse(valid)
         self.assertIn("snapshot", reason)
+
+    def trusted_hdl_manifest(self):
+        bench = self.project / 'tb/tb.v'
+        self.manifest['verification'] = {'kind': 'trusted-testbench', 'trusted_files': ['tb/tb.v']}
+        self.manifest['trusted_testbench_hashes'] = {'tb/tb.v': sha(bench)}
+        return self.manifest
+
+    def test_trusted_testbench_requires_exact_pinned_inventory(self):
+        manifest = self.trusted_hdl_manifest()
+        self.assertEqual(trusted_testbench_valid(self.project, manifest),
+                         (True, 'operator-owned testbench hashes match the manifest'))
+
+        manifest['trusted_testbench_hashes']['tb/tb.v'] = '0' * 64
+        valid, reason = trusted_testbench_valid(self.project, manifest)
+        self.assertFalse(valid)
+        self.assertIn('changed since its hash was pinned', reason)
+
+    def test_trusted_testbench_rejects_incomplete_duplicate_and_unsafe_inventory(self):
+        manifest = self.trusted_hdl_manifest()
+        manifest['trusted_testbench_hashes'] = {}
+        self.assertIn('inventory is incomplete', trusted_testbench_valid(self.project, manifest)[1])
+
+        manifest = self.trusted_hdl_manifest()
+        manifest['testbench_sources'] = ['tb/tb.v', 'tb/tb.v']
+        self.assertIn('duplicate', trusted_testbench_valid(self.project, manifest)[1])
+
+        manifest = self.trusted_hdl_manifest()
+        manifest['testbench_sources'] = [['tb/tb.v']]
+        self.assertIn('relative file paths', trusted_testbench_valid(self.project, manifest)[1])
+
+        manifest = self.trusted_hdl_manifest()
+        manifest['testbench_sources'] = ['../outside.v']
+        manifest['verification']['trusted_files'] = ['../outside.v']
+        manifest['trusted_testbench_hashes'] = {'../outside.v': '0' * 64}
+        self.assertIn('missing or unsafe', trusted_testbench_valid(self.project, manifest)[1])
+
+    def test_trusted_testbench_acceptance_is_bound_to_its_hashes(self):
+        manifest = self.trusted_hdl_manifest()
+        report = {
+            'status': 'pass',
+            'source_hashes': source_hashes(self.project, manifest),
+            'evidence_version': EVIDENCE_VERSION,
+            'verification_inputs': simulation_input_hashes(self.project, manifest),
+            'returncode': 0,
+        }
+        self.assertEqual(simulation_valid(self.project, manifest, report), (True, 'pass'))
+        (self.project / 'tb/tb.v').write_text('modified by a worker')
+        self.assertFalse(simulation_valid(self.project, manifest, report)[0])
 
 
 if __name__ == "__main__":

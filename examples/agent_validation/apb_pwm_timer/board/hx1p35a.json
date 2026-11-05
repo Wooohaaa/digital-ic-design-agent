@@ -1,0 +1,8 @@
+{
+  "board": "HX1P35A",
+  "device": "PH1P35MDG324",
+  "device_family": "ph1",
+  "signals": {},
+  "source": "HX1P35A device profile used only for synthesis fixture metadata",
+  "confidence": "Synthesis-only fixture. No user I/O pin map is approved or claimed."
+}
