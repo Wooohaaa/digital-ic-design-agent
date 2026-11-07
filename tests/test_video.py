@@ -37,9 +37,16 @@ endmodule
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'reports').mkdir()
             (root/'reports/simulation.json').write_text('{"status":"pass"}')
-            with patch.object(video,'load_manifest',return_value={'verification':{'kind':'hdmi-cube'}}), \
-                 patch.object(video,'simulation_input_hashes',return_value={}), \
-                 patch.object(video.VideoChecks,'board',side_effect=ValueError('bad pin mapping')):
+            class FailingBoardCheck:
+                def __init__(self, project):
+                    self.rows=[]
+
+                def board(self, manifest):
+                    raise ValueError('bad pin mapping')
+
+            with patch.object(video,'VideoChecks',FailingBoardCheck), \
+                 patch.object(video,'load_manifest',return_value={'verification':{'kind':'hdmi-cube'}}), \
+                 patch.object(video,'simulation_input_hashes',return_value={}):
                 with self.assertRaisesRegex(ValueError,'bad pin'):
                     video.validate_project(root)
             report=json.loads((root/'reports/simulation.json').read_text())

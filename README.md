@@ -51,7 +51,7 @@ icforge flow my-design
 
 ```powershell
 uv sync --locked --all-extras
-uv run pytest --cov=fpga_agent --cov-report=term-missing
+uv run --locked --all-extras --python 3.11 pytest --cov=fpga_agent --cov-report=term-missing
 ```
 
 GitHub Actions 覆盖 Python 3.11/3.12 与 Windows/Linux，并在 Linux 作业安装 Icarus 和 Verilator，运行三个自检 RTL 夹具。Python 包依赖由 [`uv.lock`](uv.lock) 固定；本地实测 EDA 工具版本和 TD 平台边界见 [`toolchain.json`](toolchain.json)。

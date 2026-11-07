@@ -117,7 +117,7 @@ RISC-V 专用独立验证流程：
 
 ```powershell
 uv sync --locked --all-extras
-uv run pytest --cov=fpga_agent --cov-report=term-missing
+uv run --locked --all-extras --python 3.11 pytest --cov=fpga_agent --cov-report=term-missing
 uv run python -m pip wheel . --no-deps --wheel-dir dist
 ```
 

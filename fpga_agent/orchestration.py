@@ -118,8 +118,16 @@ def validate_jobs(jobs: list, executors: list[str], catalog: list[dict]) -> list
 
 
 def file_state(root: Path, name: str):
+    root = Path(root).resolve()
     path = root/name
-    if path.is_symlink() or path.resolve()!=path.absolute():
+    current = root
+    for part in Path(name).parts:
+        current = current/part
+        if current.is_symlink():
+            raise ValueError('编排导入不支持符号链接：'+name)
+    try:
+        path.resolve().relative_to(root)
+    except ValueError:
         raise ValueError('编排导入不支持符号链接：'+name)
     if not path.exists():
         return None

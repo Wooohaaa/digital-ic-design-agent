@@ -56,7 +56,7 @@ CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 
 
 ```powershell
 uv sync --locked --all-extras
-uv run pytest --cov=fpga_agent --cov-report=term-missing
+uv run --locked --all-extras --python 3.11 pytest --cov=fpga_agent --cov-report=term-missing
 uv run python -m fpga_agent verify examples/agent_validation/sync_fifo
 uv run python -m fpga_agent lint examples/agent_validation/sync_fifo
 ```

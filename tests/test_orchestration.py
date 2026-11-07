@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from fpga_agent.agent_backends import Events, build_command, environment, command_prefix
 from fpga_agent.autonomy import TaskEngine, TaskStore, completion_gate
-from fpga_agent.orchestration import Orchestrator, git, validate_jobs, verify_workspace, workspace_gate
+from fpga_agent.orchestration import Orchestrator, file_state, git, validate_jobs, verify_workspace, workspace_gate
 from fpga_agent.terminal import Workspace, read_json, write_json
 
 CATALOG=[{'name':name,'available':True} for name in ('codex','claude','opencode')]
@@ -66,6 +66,21 @@ class ScriptedOrchestrationEngine(TrackingEngine):
 
 
 class PlanAndAdapterTests(unittest.TestCase):
+    def test_file_state_rejects_symlink_files_and_parent_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)/'root';root.mkdir()
+            outside=Path(directory)/'outside';outside.mkdir()
+            (outside/'secret.txt').write_text('outside workspace')
+            try:
+                (root/'linked.txt').symlink_to(outside/'secret.txt')
+                (root/'linked-dir').symlink_to(outside,target_is_directory=True)
+            except (OSError,NotImplementedError) as exc:
+                self.skipTest(f'filesystem symlinks unavailable: {exc}')
+            with self.assertRaisesRegex(ValueError,'符号链接'):
+                file_state(root,'linked.txt')
+            with self.assertRaisesRegex(ValueError,'符号链接'):
+                file_state(root,'linked-dir/secret.txt')
+
     def test_repeated_patch_launcher_errors_are_classified_and_success_clears_them(self):
         events=Events('codex')
         for _ in range(3):
