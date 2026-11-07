@@ -6,9 +6,9 @@
   "ci": {
     "workflow": ".github/workflows/ci.yml",
     "status": "passed",
-    "last_run_id": "42374732568",
-    "last_run_commit": "a88bfe17a5e2a1e960dbb3314cf5e0c0f9abe935",
-    "last_run_url": "https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42374732568",
+    "last_run_id": "42375073989",
+    "last_run_commit": "fa8368a37202cf38ab9211f99edc9b6dfb2f39d3",
+    "last_run_url": "https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42375073989",
     "python_matrix": ["3.11", "3.12"],
     "operating_systems": ["ubuntu-latest", "windows-latest"],
     "eda_job": ["Icarus Verilog", "Verilator"],
@@ -24,6 +24,11 @@
       "spi_master": {"icarus": "pass", "verilator_5_048": "pass"},
       "apb_pwm_timer": {"icarus": "pass", "verilator_5_048": "pass"}
     }
+  },
+  "candidate_changes": {
+    "status": "not_run",
+    "scope": ["RTL mutation audit", "task trajectory metrics", "three new engineering skills"],
+    "note": "Static Python syntax parsing and diff whitespace checks passed; Python/HDL runtime suites have not been run on this candidate."
   },
   "local_toolchain": {
     "python": "3.11.9",

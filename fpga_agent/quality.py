@@ -8,7 +8,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .evidence import hdl_input_hashes, implementation_valid, sha, simulation_valid, trusted_testbench_valid
+from .evidence import hdl_input_hashes, implementation_valid, sha, simulation_input_hashes, simulation_valid, trusted_testbench_valid
 from .project import load_manifest
 
 
@@ -193,6 +193,40 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
     add('DV-004','verification','not_run',
         'Code/toggle coverage, formal properties/equivalence and post-route simulation are not evidenced by this flow.',
         'Select required analyses in the verification plan and collect tool-produced evidence.',required=False)
+    mutation = read_report(project / 'reports/mutation.json')
+    try:
+        mutation_current = (mutation.get('status') == 'complete'
+                            and mutation.get('simulation_inputs') == simulation_input_hashes(project, manifest))
+        if mutation_current:
+            from .mutation import simulator_fingerprint
+            mutation_current = mutation.get('simulator_fingerprint') == simulator_fingerprint()
+    except (OSError, ValueError, TypeError, KeyError):
+        mutation_current = False
+    mutation_counts = mutation.get('counts', {}) if isinstance(mutation.get('counts'), dict) else {}
+    mutation_rate = mutation.get('observed_kill_rate_percent')
+    mutation_review = (not mutation_current or mutation.get('candidate_selection_truncated')
+                       or mutation_counts.get('survived', 0) > 0
+                       or mutation_counts.get('compile_error', 0) > 0
+                       or mutation_counts.get('inconclusive', 0) > 0
+                       or mutation_counts.get('timeout', 0) > 0)
+    if mutation_current:
+        mutation_status = 'review_required' if mutation_review else 'pass'
+        mutation_detail = (f"Current mutation audit: {mutation_counts.get('killed', 0)} killed, "
+                           f"{mutation_counts.get('survived', 0)} survived, "
+                           f"{mutation_counts.get('compile_error', 0)} compile-invalid; "
+                           f"observed kill rate {mutation_rate}% (diagnostic only).")
+        mutation_action = ('Inspect reports/mutation.json survivors, compile-invalid candidates and inconclusive cases; add only specification-backed checks, '
+                           'then rerun the audit.' if mutation_review else '')
+    elif mutation.get('status') in {'missing', 'invalid'}:
+        mutation_status = 'not_run'
+        mutation_detail = 'No current RTL mutation audit is recorded; existing simulation PASS does not measure testbench fault sensitivity.'
+        mutation_action = 'Run `icforge mutation-audit PROJECT` after the generic Icarus baseline passes.'
+    else:
+        mutation_status = 'not_run' if mutation.get('status') == 'blocked' else 'stale'
+        mutation_detail = 'Mutation audit is blocked, incomplete or based on different verification inputs.'
+        mutation_action = 'Resolve the audit blocker or rerun `icforge mutation-audit PROJECT` on current inputs.'
+    add('DV-005','verification',mutation_status,mutation_detail,mutation_action,
+        ['reports/mutation.json'],required=False)
     hardware_ok=False
     hardware_detail='Physical board programming and measurement have not been performed.'
     if tinyllm:

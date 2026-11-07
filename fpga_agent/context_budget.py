@@ -21,7 +21,7 @@ def pack_context(context: dict, budget: int = 96000) -> tuple[dict, dict]:
     # This is an input character cap, not a provider tokenizer or a claimed model window.
     reserve = min(8000, budget // 4)
     capacity = budget - reserve
-    protected = {"objective", "acceptance_target", "steering", "memory", "plan", "project_instructions",
+    protected = {"objective", "acceptance_target", "steering", "memory", "plan", "project_instructions", "experience_metrics",
                  "task_projects", "last_observation", "loaded_skills", "remaining_iterations", "project", "orchestration"}
     critical = {key: value for key, value in packed.items() if key in protected}
     if size(critical) + 3000 > capacity:

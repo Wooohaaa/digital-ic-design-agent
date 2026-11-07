@@ -66,6 +66,37 @@ def clean(value):
     return value
 
 
+def summarize_task_outcomes(tasks: list[dict], *, group_limit: int = 10) -> dict:
+    """Compact, privacy-preserving outcome metrics for the agent improvement loop."""
+    terminal = {"completed", "blocked", "failed", "limited", "interrupted", "cancelled"}
+    finished = [task for task in tasks if task.get("status") in terminal]
+    groups: dict[tuple[str, str, str, str], list[dict]] = {}
+    for task in finished:
+        settings = task.get("settings", {})
+        if not isinstance(settings, dict):
+            settings = {}
+        key = (str(settings.get("provider", "unknown"))[:40], str(settings.get("model", "unknown"))[:120],
+               str(task.get("mode", "engineer"))[:30], str(task.get("target", "delivery"))[:30])
+        groups.setdefault(key, []).append(task)
+
+    def summarize(items):
+        count = len(items)
+        completed = sum(item.get("status") == "completed" for item in items)
+        return {"tasks": count, "completed": completed,
+                "completion_rate_percent": round(100 * completed / count, 2) if count else None,
+                "mean_decision_steps": round(sum(int(item.get("iterations", 0) or 0) for item in items) / count, 2) if count else None,
+                "mean_elapsed_seconds": round(sum(float(item.get("elapsed_seconds", 0) or 0) for item in items) / count, 2) if count else None}
+
+    ranked_groups = sorted(groups.items(), key=lambda pair: (-len(pair[1]), pair[0]))
+    return {"sampled_tasks": len(tasks), "terminal_tasks": len(finished),
+            "active_tasks": sum(task.get("status") not in terminal for task in tasks),
+            "outcomes": summarize(finished),
+            "by_configuration": [{"provider": key[0], "model": key[1], "mode": key[2], "target": key[3], **summarize(items)}
+                                 for key, items in ranked_groups[:group_limit]],
+            "configurations_omitted": max(0, len(ranked_groups) - group_limit),
+            "limits": "Completion means the host acceptance gate passed. Token/cost usage and human quality grading are not currently recorded."}
+
+
 class Lease:
     """Kernel locks release on process death; stale PID files cannot hold a task hostage."""
 
@@ -185,6 +216,49 @@ class TaskStore:
             except ValueError:
                 continue
         return sorted(values, key=lambda v: v.get("created_at", ""), reverse=True)
+
+    def metrics(self, *, limit: int = 200) -> dict:
+        if type(limit) is not int or not 1 <= limit <= 2000:
+            raise ValueError("metrics limit must be 1..2000")
+        all_tasks = self.list()
+        tasks = all_tasks[:limit]
+        aggregate = summarize_task_outcomes(tasks, group_limit=50)
+        step_statuses: dict[str, int] = {}
+        action_stats: dict[str, dict[str, int]] = {}
+        failed_delegations = total_delegations = 0
+        for task in tasks:
+            task_id = task.get("id")
+            records = {}
+            if isinstance(task_id, str):
+                for path in self.directory(task_id).glob("step-*/result.json"):
+                    record = read_json(path, {})
+                    if isinstance(record, dict) and type(record.get("iteration")) is int:
+                        records[record["iteration"]] = record
+            for record in task.get("steps", []):
+                if isinstance(record, dict) and type(record.get("iteration")) is int:
+                    records[record["iteration"]] = record
+            for record in records.values():
+                status = str(record.get("status", "unknown"))
+                step_statuses[status] = step_statuses.get(status, 0) + 1
+                action = record.get("decision", {}).get("action") if isinstance(record.get("decision"), dict) else None
+                if isinstance(action, str) and action != "none":
+                    item = action_stats.setdefault(action, {"calls": 0, "failures": 0})
+                    item["calls"] += 1
+                    if status == "failed" or record.get("exit_code") not in (None, 0):
+                        item["failures"] += 1
+            for batch in task.get("delegations", []):
+                if not isinstance(batch, dict):
+                    continue
+                for job in batch.get("jobs", []):
+                    if isinstance(job, dict):
+                        total_delegations += 1
+                        failed_delegations += job.get("status") in {"failed", "blocked", "timed_out"}
+        aggregate.update({"decision_step_statuses": step_statuses,
+                          "tool_actions": [{"action": name, **values} for name, values in sorted(action_stats.items())],
+                          "delegated_jobs": total_delegations, "failed_delegated_jobs": failed_delegations,
+                          "available_tasks": len(all_tasks), "truncated": len(all_tasks) > len(tasks),
+                          "sample_limit": limit})
+        return aggregate
 
     def save(self, task: dict):
         task["updated_at"] = timestamp()
@@ -540,8 +614,10 @@ class TaskEngine:
             context['last_observation'] = previous.get('observation', {key:previous[key] for key in ('iteration','status','exit_code','output_tail','log_truncated') if key in previous})
             if previous.get('decision',{}).get('action') == 'skill' and previous.get('observation',{}).get('id') in {item['id'] for item in self.task.get('loaded_skills',[])}:
                 context['last_observation'] = {key:previous['observation'][key] for key in ('id','sha256','source') if key in previous['observation']}
+        recent_tasks = self.store.list()
         context['experience_catalog'] = [{key:task.get(key) for key in ('id','status','updated_at')}
-            | {'objective':task.get('objective','')[:200]} for task in self.store.list()[:6] if task['id']!=self.task['id']]
+            | {'objective':task.get('objective','')[:200]} for task in recent_tasks[:6] if task['id']!=self.task['id']]
+        context['experience_metrics'] = summarize_task_outcomes(recent_tasks[:50], group_limit=6)
         context['orchestration']={**self.task.get('orchestration',{'enabled':False}),
             'available_agents':available_agents() if self.task.get('mode')=='orchestrate' else [],
             'batches':self.task.get('delegations',[])[-4:],'checks':self.task.get('checks',[]),
@@ -751,11 +827,13 @@ def configure_parser(commands):
     start.add_argument("--max-hours", type=float, default=24)
     start.add_argument("--max-failures", type=int, default=3)
     start.add_argument('--context-chars',type=int,default=96000)
-    for name in ("list", "status", "logs", "context", "agents", "pause", "resume", "cancel", "steer"):
+    for name in ("list", "metrics", "status", "logs", "context", "agents", "pause", "resume", "cancel", "steer"):
         parser = sub.add_parser(name)
         parser.add_argument("--workspace", default=".")
-        if name != "list":
+        if name not in {"list", "metrics"}:
             parser.add_argument("task_id", nargs="?", default="latest")
+        if name == "metrics":
+            parser.add_argument("--limit", type=int, default=200, help="最多统计最近 N 个任务")
         if name == "resume":
             parser.add_argument("--extra-steps", type=int, default=0)
             parser.add_argument("--extra-hours", type=float, default=0)
@@ -798,6 +876,8 @@ def dispatch(args) -> int:
     elif name == "list":
         result = [{key: task.get(key) for key in ("id", "objective", "status", "reason", "project", "iterations", "elapsed_seconds")}
                   for task in store.list()]
+    elif name == "metrics":
+        result = store.metrics(limit=args.limit)
     elif name == "resume":
         if args.use_current_model:
             if store.busy():

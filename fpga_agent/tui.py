@@ -524,7 +524,7 @@ class ForgeApp(App):
                 return
             allowed = {"/tasks", "/pause", "/stop", "/steer", "/status", "/help", "/?", "/connect",
                        "/theme", "/logo", "/model", "/provider", "/open", "/files", "/artifacts",
-                       "/export", "/diff", "/quit", "/exit", "/cancel", "/auto",
+                       "/export", "/diff", "/quit", "/exit", "/cancel", "/auto", "/metrics",
                        "/skills", "/skill", "/recall", "/context", "/agents", "/mode", "/agent-model"}
             if text.partition(" ")[0] not in allowed:
                 raise ValueError("长期任务正在操作工作区。用 /pause 暂停，或直接输入补充要求。")
@@ -709,6 +709,10 @@ class ForgeApp(App):
                 if path.is_file():
                     paths.append(path)
             await self.add_message("assistant", "\n".join(f"- `{p.relative_to(self.workspace.root).as_posix()}` · {p.stat().st_size:,} bytes" for p in paths) or "尚未生成产物。运行 `/verify` 或 `/flow`。")
+        elif command == "/metrics":
+            body = json.dumps(task_store.metrics(), ensure_ascii=False, indent=2)
+            body += "\n\n这些数据来自宿主验收和已记录的任务步骤，不包含 prompt、密钥或 token/费用用量。"
+            await self.add_message("assistant", "```json\n" + body + "\n```")
         elif command == "/open":
             if not rest:
                 raise ValueError("用法：/open rtl/core.v（相对当前工程）")

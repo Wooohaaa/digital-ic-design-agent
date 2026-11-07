@@ -12,7 +12,9 @@
 | Verilator | 本机 5.048 / MSYS2 UCRT64 | 已安装；历史 `blocked` 报告需通过本次严格 lint 刷新 |
 | Anlogic TD | 本机 6.2.168.116 | Windows 本机可用；GitHub runner 不含该厂商工具 |
 
-CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 3.11/3.12 × Windows/Linux 单元回归；独立 Ubuntu 作业安装 Icarus 与 Verilator，并对 FIFO、SPI、APB 三个固定夹具执行仿真和严格 lint。GitHub Actions 已在提交 `a88bfe17a5e2a1e960dbb3314cf5e0c0f9abe935` 全部通过：[本次运行](https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42374732568)。Anlogic TD 未纳入托管 runner，仍由本机工程门禁负责。
+CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 3.11/3.12 × Windows/Linux 单元回归；独立 Ubuntu 作业安装 Icarus 与 Verilator，并对 FIFO、SPI、APB 三个固定夹具执行仿真和严格 lint。主线提交 `fa8368a37202cf38ab9211f99edc9b6dfb2f39d3` 的最新 GitHub Actions 全部通过：[本次运行](https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42375073989)。Anlogic TD 未纳入托管 runner，仍由本机工程门禁负责。
+
+本次 agent 评价闭环和 mutation audit 候选改动尚未运行 Python/HDL 回归；下方的回归数字只代表先前已测基线，不代表这些新改动已验收。
 
 ## 本机回归与覆盖率
 
@@ -46,7 +48,7 @@ CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 
 1. CPU STA 未覆盖端点、IO delay、时钟/复位例外和板卡 revision 尚未逐项对照官方资料闭合。HDMI 一项的高覆盖率不能替代 CPU 约束审查。
 2. 尚未集成 Spike / RISC-V Architectural Certification Tests，也没有 RV32I 形式证明或 LEC。
 3. CDC/RDC、post-route 仿真、RTL 功能覆盖闭合和 ASIC 物理签核尚未完成。
-4. 普通 RTL 的模型生成 testbench 仍需要独立审阅；需求 ID 出现不等于断言语义充分。
+4. 普通 RTL 的模型生成 testbench 仍需要独立审阅；generic Icarus 项目现在可用 mutation audit 诊断常见运算符错误的检出能力，但不判定等价 mutant，也不替代规格审阅、CPU/视频专用验证或 formal。
 5. HX1P35A 引脚表仍需对照所用板卡 revision 的官方原理图复核。
 6. RGB(0,0,0) HDMI 失锁尚无电气或接收端根因结论。
 7. Python agent 总覆盖率为 67%；`cli.py`、`tinyllm.py`、`tinyllm_hardware.py`、`ui_worker.py`、视频捕获及 programmer 的部分错误分支仍需补测。

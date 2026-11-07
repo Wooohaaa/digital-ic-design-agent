@@ -32,9 +32,10 @@ ic-forge --resume <session-id>
 
 1. `/project` 选择已有工程，或 `/init counter-demo` 创建工程。
 2. 已有工程可以直接 `/verify`。它会执行真实 Icarus 仿真，按 Ctrl+J 展开逐行日志。
-3. `/connect` 选择模型接口并填写模型名。API Key 输入框为密码模式；Key 只进入当前进程内存和任务子进程环境，不写配置、会话或模型请求文件。
-4. 直接描述需求，如“设计一个带使能、同步复位、溢出检测的 32 位计数器，生成自检仿真”。模型可以回答设计问题，或选择受支持的设计工具。
-5. 需要 FPGA 完整交付时使用 `/flow`，或写明生成、仿真、TD 实现和交付的要求。
+3. `/mutation-audit` 在隔离副本中检查 generic Icarus testbench 能否抓住常见 RTL 运算符错误。
+4. `/connect` 选择模型接口并填写模型名。API Key 输入框为密码模式；Key 只进入当前进程内存和任务子进程环境，不写配置、会话或模型请求文件。
+5. 直接描述需求，如“设计一个带使能、同步复位、溢出检测的 32 位计数器，生成自检仿真”。模型可以回答设计问题，或选择受支持的设计工具。
+6. 需要 FPGA 完整交付时使用 `/flow`，或写明生成、仿真、TD 实现和交付的要求。
 
 底部状态行的空心圆表示未配置模型，实心圆表示配置已就绪；实际模型权限和网络状态在请求时验证。当前没有为用户自动配置 API Key。`exchange` 是已有响应重放，不能用于新对话；已有 CPU 用 `/replay --full` 可以重现，无需在线模型。
 
@@ -51,6 +52,7 @@ ic-forge --resume <session-id>
 | 项目侧栏 / 工具日志 | Ctrl+B / Ctrl+J |
 | 取消任务 | Esc 或 Ctrl+C；会终止任务进程及其子进程 |
 | 清空输入 | 空闲时 Ctrl+C |
+| agent 任务指标 | `/metrics` |
 | 新会话 / 恢复 | Ctrl+N 或 `/new`；`/resume` 或 `/resume id` |
 | 退出 | Ctrl+Q 或 `/quit` |
 
@@ -110,6 +112,8 @@ RISC-V 专用独立验证流程：
 右侧 SIM / TD 以当前文件和可信参考的指纹检查显示 CURRENT、STALE、FAILED 或 NOT RUN，旧报告不会自动当作当前通过。时序和资源值是最近记录的数据，是否有效以 CURRENT 状态为准。
 
 `/status` 查看原因，`/artifacts` 列出报告、ZIP 和位流。完整交付仍要求当前仿真通过、TD 时序收敛和 bitstream 指纹一致；`/package --simulation-only` 显式生成仿真材料。HX1P35A SRAM 下载仅由显式的 `--program`/硬件流程请求触发，不会由普通对话自动写板。
+
+普通 generic HDL 工程可用 `/mutation-audit` 或 `icforge mutation-audit PROJECT` 审计现有 testbench 的 fault sensitivity；该结果是可选诊断，不替代形式验证或工程签核。长期任务的宿主验收完成率、步数、耗时和工具失败可通过 `/metrics` 或 `icforge task metrics` 查看。
 
 长任务使用独立 Python/EDA 进程，工具输出实时进入日志；模型回答当前在完整结构化响应返回后显示，不提供模型 token 流式展示。退出或取消会清理进程树。任务日志保存在 `.fpga-agent/jobs/`，最多保留每次任务 4 MB 的 UI 日志；可自行删除该目录回收空间。
 

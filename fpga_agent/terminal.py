@@ -25,6 +25,7 @@ COMMANDS = {
     "/project": "切换工程", "/init": "创建工程：/init name",
     "/design": "生成 RTL：/design 需求描述", "/cpu": "生成 CPU：/cpu name multi --full",
     "/verify": "独立仿真验证", "/synth": "TD 逻辑综合", "/td": "TD 综合与布局布线",
+    "/mutation-audit": "变异测试：检查 testbench 能否抓住常见 RTL 错误",
     "/lint": "严格 RTL lint", "/review": "工程团队审查与未完成事项",
     "/flow": "仿真 → TD → 交付", "/package": "生成交付包", "/suite": "三个 CPU 回归",
     "/replay": "重放当前 CPU 的 Luna 响应", "/status": "查看证据与工具状态",
@@ -37,7 +38,7 @@ COMMANDS = {
     "/logo": "选择 ICFORGE 字标",
     "/plan": "切换 Plan / Build", "/run": "执行待运行计划",
     "/task": "启动持续任务：/task 目标（--simulation-only 仅仿真）",
-    "/auto": "自然语言复杂设计任务自动持续执行：/auto on 或 off",
+    "/auto": "自然语言复杂设计任务自动持续执行：/auto on 或 off", "/metrics": "查看本工作区 agent 任务轨迹指标",
     "/tasks": "查看长期任务：/tasks [ID]", "/pause": "暂停长期任务",
     "/continue": "恢复长期任务", "/stop": "取消长期任务",
     "/steer": "补充长期任务要求：/steer ID 内容",
@@ -323,7 +324,7 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
     if action == "suite":
         commands = [cli + ["cpu-suite", "--root", str(workspace.root / "benchmarks")] + (["--full"] if full else [])]
         return TaskPlan("RISC-V benchmark suite", commands)
-    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review", "video-hardware"}:
+    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "mutation-audit", "synth", "td", "flow", "package", "replay", "lint", "review", "video-hardware"}:
         raise ValueError(f"不支持的工具：{action}")
     if not project:
         raise ValueError("先使用 /project 选择工程，或 /init name 创建工程。")

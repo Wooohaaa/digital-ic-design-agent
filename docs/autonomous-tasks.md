@@ -12,6 +12,7 @@ IC Forge 的持续任务会循环读取工程证据、决定下一步、执行�
 /task 为当前工程完成验证、TD 实现和交付，保留失败反例，逐项报告未关闭事项
 /task --simulation-only 设计一个带同步复位和溢出保护的计数器，并完成仿真验收
 /tasks
+/metrics
 /tasks 任务ID
 /pause 任务ID
 /steer 任务ID 增加复位过程中输入变化的边界覆盖
@@ -31,6 +32,7 @@ Plan 模式仍需要 `/run` 才会启动。后台 worker 启动后，可以关�
 $env:OPENAI_API_KEY = '你的 Key'
 icforge task start '完成现有 CPU 的验证、实现和交付' --workspace . --project benchmarks/rv32_multi --provider api --model gpt-6-luna --target delivery --max-steps 64 --max-hours 24
 icforge task list
+icforge task metrics --workspace .
 icforge task status
 icforge task logs
 icforge task pause
@@ -50,6 +52,7 @@ icforge task cancel 任务ID
 - `simulation` 目标要求当前工程输入的仿真证据通过；`delivery` 还要求有效 FPGA 实现、当前交付 ZIP、校验文件及包内验证输入/位流指纹一致。
 - 多工程任务会保留经工具选择的工程清单，并对清单内每个工程检查目标门槛，最后一个工程通过不足以完成整个任务。
 - 模型声明“完成”后，宿主仍检查验收门槛。交付产物通过的范围由工程报告说明，工程签核和实板验收依据各自记录。
+- `task metrics` 汇总宿主验收的完成率、决策步数、耗时、工具失败和委派失败，供工程师比较固定任务集上的 agent 配置；它不记录 token/费用，也不替代逐步轨迹审查。
 - 默认最多 64 次决策、24 小时累计运行时间，等待模型和工具也计入预算。同一证据状态下反复调用相同工具会停止；连续规划错误也有上限。`design` 内部可以调用多次模型，步数预算不等同于 API 请求数或费用预算。
 - 暂停/取消会终止正在运行的工具进程树；恢复后读取磁盘证据重新规划。中断工具内部的仿真周期、TD 内部阶段或未完成的模型输出不会原地接续。
 - 进程异常退出会释放系统锁，留下的步骤标记为中断。若原工具子进程仍存在，恢复会拒绝重叠执行，并给出 PID，等待原进程结束后再恢复。

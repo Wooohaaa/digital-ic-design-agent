@@ -11,7 +11,7 @@ from .terminal import redact, write_json
 SCHEMA = {
     "type": "object", "properties": {
         "message": {"type": "string"},
-        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "suite", "lint", "review", "video-hardware"]},
+        "action": {"type": "string", "enum": ["none", "init", "design", "cpu-design", "tinyllm", "verify", "mutation-audit", "synth", "td", "flow", "package", "suite", "lint", "review", "video-hardware"]},
         "arguments": {"type": "object", "properties": {
             "project": {"type": "string"}, "brief": {"type": "string"},
             "architecture": {"type": "string", "enum": ["single", "multi", "pipeline"]},
@@ -27,6 +27,8 @@ Tools: init creates a template; design generates generic Verilog/testbench with 
 tinyllm prepares/verifies the fixed TinyStories260K FP32 RV32I/SPI reference profile on HX1P35A,
 limited to 64 tokens, with host tokenization and board inference. full adds TD/package, not hardware validation.
 cpu-design generates a new RV32I CPU and independent verification; verify runs existing tests;
+mutation-audit injects bounded, deterministic single-operator RTL faults into a disposable project copy
+and measures whether the existing Icarus testbench detects them; it never edits source RTL or testbench.
 synth runs TD synthesis; td runs synthesis and route; flow verifies, implements and packages existing RTL;
 package packages verified results; suite tests existing three CPU benchmarks. none is conversational.
 lint runs strict Verilator lint; review produces evidence-driven discipline reviews and next actions.
@@ -34,6 +36,7 @@ video-hardware captures the already programmed HDMI cube and checks independent 
 It requires current payload-bound programming evidence and never programs hardware on a model-selected action.
 Use the engineering_review context to identify the first blocked gate and select the appropriate next tool.
 Never equate a self-check PASS with independent verification, coverage closure, hardware validation or signoff.
+A mutation-audit score is diagnostic, not proof: surviving mutants can be equivalent, and compile failures are not killed mutants.
 Keep requirement/testbench contracts frozen during automatic RTL repairs. If the verifier is wrong, report
 the issue for explicit revision rather than silently weakening checks. Missing tools are blocked, not passed.
 For a new generic design include the user's full requirements in brief; choose a project folder name

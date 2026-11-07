@@ -38,6 +38,8 @@ icforge flow my-design
 
 `flow` 会在当前验证证据有效时运行 TD 实现并打包。没有工具或未关闭的人工审查会作为明确状态保留；`artifact_ready` 不等于工程签核。详细门禁见[工程审查流程](docs/engineering-workflow.md)。
 
+普通 Icarus testbench 通过后，可用 `icforge mutation-audit PROJECT` 抽样注入 RTL 运算符错误，量化 testbench 检错能力；命令在临时副本运行，不改工程源文件。长期任务的成功率、失败工具和耗时可用 `icforge task metrics` 汇总。
+
 ## 工程验证记录
 
 - [当前验证状态与未关闭事项](docs/engineering-validation.md)
@@ -46,6 +48,7 @@ icforge flow my-design
 - [HX1P35A HDMI 立方体实板记录](docs/hdmi-cube-flow.md)
 - [TinyStories260K 实板推理记录](docs/tinystories-flow.md)
 - [Agent 并行调度回归夹具](docs/agent-validation-roadmap.md)
+- [RTL mutation audit](docs/rtl-mutation-audit.md) · [Agent 任务评估](docs/agent-evaluation.md)
 
 ## 开发与 CI
 

@@ -49,7 +49,7 @@ description: 检查 FPGA 时序、覆盖率和未关闭工程事项。
 
 元数据解析支持 `name`、`description` 的普通、引号和缩进多行字符串；复杂 YAML 扩展需改写成这些简单形式。其他字段不会作为命令执行。
 
-目录只包含名称、描述、来源和指纹，不预先注入全部正文。默认有界发现最多 100 个有效技能，问题文件会出现在 issues 中。同名技能不静默覆盖，使用 `/skills` 显示的来源限定 ID 选择。三个随包附带的流程是 `rv32-validation`、`hx1p35a-delivery`、`tinystories-hardware`。
+目录只包含名称、描述、来源和指纹，不预先注入全部正文。默认有界发现最多 100 个有效技能，问题文件会出现在 issues 中。同名技能不静默覆盖，使用 `/skills` 显示的来源限定 ID 选择。随包技能包括 `rv32-validation`、`hx1p35a-delivery`、`tinystories-hardware`、`rtl-mutation-audit`、`agent-evaluation-loop` 和 `sta-constraint-audit`。
 
 加载技能也可按需读取同一技能目录下的参考文本。外部技能附带的脚本不会自动运行；只有现有的受限工程工具可执行。技能或历史记录不能跳过工程验收。已加载技能发生变化或消失时，上下文会标记为过期，须重新加载。
 

@@ -362,6 +362,12 @@ def parser() -> argparse.ArgumentParser:
 
     verify = commands.add_parser("verify", help="运行自检 testbench 并保存报告")
     verify.add_argument("project")
+    mutation = commands.add_parser("mutation-audit", help="在隔离副本中审计 testbench 的 RTL 变异检出能力")
+    mutation.add_argument("project")
+    mutation.add_argument("--max-mutants", type=int, default=128)
+    mutation.add_argument("--timeout", type=int, default=30, help="每个变异的仿真超时秒数")
+    mutation.add_argument("--total-timeout", type=int, default=1800, help="审计总时限秒数")
+    mutation.add_argument("--seed", type=int, default=1, help="稳定的变异样本种子")
     video = commands.add_parser('video-hardware',help='终端采集 HDMI，并用独立几何参考验证实板立方体旋转')
     video.add_argument('project')
     video.add_argument('--device',default='Hagibis')
@@ -544,6 +550,17 @@ def main(argv: list[str] | None = None) -> int:
             print(result.output, end="")
             print(f"\n仿真状态：{result.status}（{result.elapsed_seconds:.3f}s）")
             return 0 if result.status == "pass" else 1
+        if args.command == "mutation-audit":
+            from .mutation import mutation_audit
+            progress = lambda message: print(message, flush=True)
+            report = mutation_audit(project, max_mutants=args.max_mutants, timeout=args.timeout,
+                                    total_timeout=args.total_timeout, seed=args.seed, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "baseline", "candidate_count", "selected_count", "completed_count",
+                "candidate_selection_truncated", "seed", "counts", "observed_kill_rate_percent", "elapsed_seconds",
+                "reason", "note") if key in report}, ensure_ascii=False, indent=2))
+            print(f"完整变异清单：{project / 'reports' / 'mutation.json'}")
+            return 0 if report.get("status") == "complete" else 2
         if args.command == "td":
             return do_td(project, args.stage, args.td_root)
         if args.command == "package":

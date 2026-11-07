@@ -29,3 +29,15 @@
 ## 验证记录
 
 本轮完整回归 126 项通过。后台集成测试使用本地模型响应服务驱动七轮决策，包含实际 Icarus 仿真；同时覆盖技能来源冲突、分页与路径边界、过期技能、上下文溢出恢复、需求保护和会话交接拒绝执行旧计划。wheel 构建、独立目录安装、全局 CLI 及随包三份技能均验证通过。远端真实模型的跨天稳定性尚未验收。
+
+## 下一轮：评价闭环与验证强度
+
+2026-11-07 对照了[RTL mutation testing 研究](https://arxiv.org/abs/2608.12635)、[RTL bug benchmark 方法](https://arxiv.org/abs/2609.18022)和 [OpenAI agent workflow eval 指南](https://developers.openai.com/api/docs/guides/agent-evals)。前者通过可重复注入语义故障测 testbench 检错能力；后者强调从完整运行轨迹发现工具选择、handoff 和 guardrail 问题，再用固定数据集比较迭代。
+
+IC Forge 本轮增加 `mutation-audit`：以当前输入指纹为基线，在临时工程副本中跑确定性单点 RTL operator mutations，记录 killed/survived/compile-error/inconclusive，并将 `DV-005` 加入可选工程审查。审计进度保存在工程报告中，重启同配置可续跑；幸存变异不等于 testbench 一定有漏测，因为其中可能含等价 mutant。
+
+新增 `icforge task metrics` 与 TUI `/metrics`：根据持久化任务轨迹统计宿主验收完成率、平均决策步数/耗时、失败工具和委派结果；agent 后续规划上下文也会收到有界的历史 outcome summary。它当前不记录 token/费用，也不会自动改写 prompt 或工具策略，避免把小样本相关性误当成优化结论。
+
+新增技能：`rtl-mutation-audit`、`agent-evaluation-loop`、`sta-constraint-audit`。其中 STA 技能帮助审查端点和约束覆盖；mutation/evaluation 有对应命令可运行。所有历史指标和技能内容都是建议，最终门槛继续依据当前宿主证据。
+
+本轮边界：mutation audit 当前仅支持 generic Icarus 验证；CPU/视频/TinyStories 继续走专用验证器。自动生成激励、通过 formal 判断等价 mutant、token/费用计量、人工质量评分和 agent 自动改策略仍未实现。
