@@ -14,7 +14,7 @@
 
 三份初始候选来自此前的 gpt-6-luna exchange 生成记录；本轮重新验证已有 RTL，没有发起新的在线模型调用。每份包含 50 个定向程序和 64 个确定性随机程序，另验证用于综合的 ROM/RAM SoC 签名。所有最终 setup/hold TNS 均为 0。资源统计包含板级 SoC 测试封装。
 
-工程签核尚未授予：Verilator 未安装，STA 覆盖率未达 100%，原始需求文档、时钟复位/例外约束及实板验收仍需关闭。当前结果表示受支持范围的回归和 FPGA 产物证据通过。审查方法见 [engineering-workflow.md](engineering-workflow.md)。
+工程签核尚未授予：本机目前已安装 Verilator 5.048，但这份历史 CPU 运行记录没有对应的严格 lint 结果；CPU STA 覆盖率也未达 100%，时钟复位/例外约束仍需逐项审查。单周期核已完成 SRAM-only JTAG 配置，但 R11 功能签名没有外部采集，因此板上功能验收未闭合。审查方法见 [engineering-workflow.md](engineering-workflow.md) 和[当前工程状态](engineering-validation.md)。
 
 仿真周期是整个回归集合的总数，包含终止/异常检测和流水线填充/冲刷；不能直接作为 CoreMark 或系统性能指标。
 

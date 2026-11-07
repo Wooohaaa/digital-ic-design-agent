@@ -109,16 +109,26 @@ RISC-V 专用独立验证流程：
 
 右侧 SIM / TD 以当前文件和可信参考的指纹检查显示 CURRENT、STALE、FAILED 或 NOT RUN，旧报告不会自动当作当前通过。时序和资源值是最近记录的数据，是否有效以 CURRENT 状态为准。
 
-`/status` 查看原因，`/artifacts` 列出报告、ZIP 和位流。完整交付仍要求当前仿真通过、TD 时序收敛和 bitstream 指纹一致；`/package --simulation-only` 显式生成仿真材料。板卡下载由用户在 TD BitWriter 中完成，本版没有自动上板功能。
+`/status` 查看原因，`/artifacts` 列出报告、ZIP 和位流。完整交付仍要求当前仿真通过、TD 时序收敛和 bitstream 指纹一致；`/package --simulation-only` 显式生成仿真材料。HX1P35A SRAM 下载仅由显式的 `--program`/硬件流程请求触发，不会由普通对话自动写板。
 
 长任务使用独立 Python/EDA 进程，工具输出实时进入日志；模型回答当前在完整结构化响应返回后显示，不提供模型 token 流式展示。退出或取消会清理进程树。任务日志保存在 `.fpga-agent/jobs/`，最多保留每次任务 4 MB 的 UI 日志；可自行删除该目录回收空间。
 
 ## 开发和检查
 
 ```powershell
-python -m unittest discover -s tests -v
-python -m pip wheel . --no-deps --wheel-dir dist
+uv sync --locked --all-extras
+uv run pytest --cov=fpga_agent --cov-report=term-missing
+uv run python -m pip wheel . --no-deps --wheel-dir dist
 ```
+
+TD run 默认不自动删除，以免破坏报告引用。先查看清理计划，再显式应用保留策略；默认保留最近 5 次和任何报告引用的 run：
+
+```powershell
+icforge prune-runs benchmarks/rv32_single
+icforge prune-runs benchmarks/rv32_single --keep 5 --apply
+```
+
+此命令只操作 `td/runs`，不会触碰 `.fpga-agent/trees`。并行 agent worktree 的独立保留策略仍需审查；只可清理干净且已合并的工作区。
 
 TUI 测试用 Textual Pilot 驱动真实键盘、弹窗和布局，并用本地 HTTP 测试服务覆盖“模型接口 → 工具计划 → Icarus 仿真”；测试服务不代表真实 Luna 调用。截图脚本使用可选开发依赖 `resvg-py`：
 

@@ -96,6 +96,18 @@ class WorkspaceTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_coverage_hooks_are_not_inherited_by_engineering_subprocesses(self):
+        import json
+        env = dict(os.environ, COV_CORE_SOURCE="fpga_agent", COV_CORE_DATAFILE=".coverage-child",
+                   COVERAGE_FILE=".coverage-child", COVERAGE_PROCESS_START="coverage.ini")
+        lines = []
+        code = await ProcessRunner().run(
+            [sys.executable, "-c", "import json,os;print(json.dumps({k:v for k,v in os.environ.items() if k.startswith('COV_CORE_') or k in {'COVERAGE_FILE','COVERAGE_PROCESS_START'}}))"],
+            Path.cwd(), env, lines.append)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(lines[0]), {})
+        self.assertIn("COV_CORE_SOURCE", env)
+
     async def test_native_json_event_is_preserved_above_normal_terminal_line_limit(self):
         import json
         lines=[];runner=ProcessRunner()

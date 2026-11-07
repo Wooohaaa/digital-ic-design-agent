@@ -17,7 +17,7 @@ import zipfile
 from dataclasses import asdict
 from pathlib import Path
 
-from .terminal import ProcessRunner, Settings, Workspace, evidence, make_plan, read_json, redact, timestamp, write_json
+from .terminal import ProcessRunner, Settings, Workspace, child_environment, evidence, make_plan, read_json, redact, timestamp, write_json
 from .context_budget import ContextBudgetError, pack_context, size
 from .knowledge import READ_ACTIONS, execute_read
 from .agent_backends import BACKENDS, available as available_agents
@@ -296,7 +296,7 @@ class TaskStore:
         task["limits"]["seconds"] += extra_hours * 3600
         if task["iterations"] >= task["limits"]["steps"] or task["elapsed_seconds"] >= task["limits"]["seconds"]:
             raise ValueError("预算已用尽，resume 时追加 --extra-steps 或 --extra-hours。")
-        environment = dict(os.environ if env is None else env)
+        environment = child_environment(dict(os.environ if env is None else env))
         if task["settings"]["provider"] in {"api", "chat"} and not (environment.get("OPENAI_API_KEY") or environment.get("FPGA_AGENT_API_KEY")):
             raise ValueError("请先通过 OPENAI_API_KEY 或 FPGA_AGENT_API_KEY 提供实时模型凭据。")
         if task["settings"]["provider"] == "codex" and not shutil.which("codex", path=environment.get("PATH")):

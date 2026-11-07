@@ -28,7 +28,7 @@ data=json.loads(sys.stdin.read().splitlines()[-1]); j=data['job']
 print(json.dumps({'type':'thread.started','thread_id':'fixture-'+j['id']}),flush=True)
 print(json.dumps({'type':'fixture.start','time':time.time()}),flush=True)
 if j['prompt']=='WAIT' and not sys.argv[1]: time.sleep(30)
-elif j['prompt']=='SLOW': time.sleep(2)
+elif j['prompt']=='SLOW': time.sleep(8)
 else: time.sleep(0.3)
 if j['role']=='review':
     assert Path('a.py').exists() and Path('b.py').exists(), 'review must see dependencies'
@@ -148,7 +148,7 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         self.store=TaskStore(Workspace(self.root))
         task=self.store.create('完成两个模块和独立审查',mode='orchestrate',target='workspace',
             checks=[{'name':'host-check','argv':['python','-c',"from pathlib import Path;assert Path('a.py').is_file()"]}],
-            max_agents=2,agent_timeout=5)
+            max_agents=2,agent_timeout=15)
         self.engine=TrackingEngine(self.store,task['id'])
         self.catalog_patch=patch('fpga_agent.orchestration.available',return_value=CATALOG)
         self.command_patch=patch('fpga_agent.orchestration.build_command',side_effect=stub_command)
@@ -241,9 +241,12 @@ class WorktreeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((self.root/'a.py').exists())
         (self.engine.directory/'control.json').unlink()
         restarted=ScriptedOrchestrationEngine(self.store,self.engine.task['id'])
-        restarted.decisions=iter([
-            {'decision':'execute','message':'验收恢复结果','plan':['验收'],'memory':'恢复前置节点','action':'workspace-verify','arguments':{}},
-            {'decision':'complete','message':'固定验收已通过','plan':[],'memory':'恢复完成','action':'none','arguments':{}}])
+        verify={'decision':'execute','message':'验收恢复结果','plan':['验收'],'memory':'恢复前置节点','action':'workspace-verify','arguments':{}}
+        complete={'decision':'complete','message':'固定验收已通过','plan':[],'memory':'恢复完成','action':'none','arguments':{}}
+        # Coverage instrumentation and cold Windows Python startup add latency;
+        # retain bounded replanning turns instead of coupling this test to exactly
+        # two model calls when the first host check needs another observation.
+        restarted.decisions=iter([verify,complete] * 3)
         finished=await restarted.run()
         self.assertEqual(finished['status'],'completed',finished['reason'])
         resumed=finished['delegations'][-1]

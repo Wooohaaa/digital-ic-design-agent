@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "python": {
+    "minimum": "3.11",
+    "tested_local": "3.11.9",
+    "ci": ["3.11", "3.12"]
+  },
+  "eda": {
+    "icarus_verilog": {
+      "minimum": "12.0",
+      "tested_local": "12.0 (devel, commit 2693dd32b)",
+      "local_binary": ".tools/icarus/bin/iverilog.exe"
+    },
+    "verilator": {
+      "minimum": "5.0",
+      "tested_local": "5.048",
+      "local_distribution": "MSYS2 UCRT64"
+    },
+    "anlogic_td": {
+      "tested_local": "6.2.168.116",
+      "platform": "Windows only",
+      "ci": false
+    }
+  },
+  "board": "HX1P35A / PH1P35MDG324"
+}

@@ -146,7 +146,7 @@ def _hardware_run(project: Path, *, device='Hagibis', seconds=12, settle=5, prog
         (directory/'capture.log').write_text(result.stdout+result.stderr,encoding='utf-8')
         if result.returncode or not video.is_file():raise RuntimeError('FFmpeg capture failed; see capture.log')
         extract=[str(ffmpeg),'-hide_banner','-loglevel','error','-i',str(video),'-vf',
-                 f'fps=2,select=gte(t\,{settle})','-y',str(directory/'frame-%03d.png')]
+        f'fps=2,select=gte(t\\,{settle})','-y',str(directory/'frame-%03d.png')]
         decoded=subprocess.run(extract,capture_output=True,text=True,errors='replace',timeout=60)
         if decoded.returncode:raise RuntimeError('FFmpeg decode failed: '+decoded.stderr[-2000:])
         paths=sorted(directory.glob('frame-*.png'))

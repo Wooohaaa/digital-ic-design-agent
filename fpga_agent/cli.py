@@ -411,6 +411,10 @@ def parser() -> argparse.ArgumentParser:
     suite=commands.add_parser('cpu-suite',help='independent RV32I regression across prepared CPU designs')
     suite.add_argument('--root',default='benchmarks')
     suite.add_argument('--full',action='store_true')
+    prune=commands.add_parser('prune-runs',help='清理旧 TD run；默认仅预览，使用 --apply 执行')
+    prune.add_argument('project')
+    prune.add_argument('--keep',type=int,default=5,help='保留最近 N 次及报告引用的 run')
+    prune.add_argument('--apply',action='store_true',help='执行删除；默认 dry-run')
     from .autonomy import configure_parser
     configure_parser(commands)
     from .knowledge import configure_parser as knowledge_parser
@@ -514,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
                 results.append(item)
             (root/'suite-report.json').write_text(json.dumps(results,indent=2)+'\n',encoding='utf-8')
             return 0 if all(r['simulation']=='pass' and (not args.full or r.get('package_returncode')==0) for r in results) else 1
+        if args.command=='prune-runs':
+            from .retention import prune_td_runs
+            result=prune_td_runs(resolve_project(args.project),keep=args.keep,apply=args.apply)
+            print(json.dumps(result,ensure_ascii=False,indent=2))
+            return 0
         project = resolve_project(args.project)
         if args.command == 'lint':
             from .quality import lint_project

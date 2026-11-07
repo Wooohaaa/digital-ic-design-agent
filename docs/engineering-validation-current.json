@@ -1,0 +1,49 @@
+{
+  "report_date": "2026-11-07",
+  "icforge_version": "0.6.0",
+  "package_name": "icforge",
+  "python_import_package": "fpga_agent",
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "status": "configured_not_yet_observed_on_github",
+    "python_matrix": ["3.11", "3.12"],
+    "operating_systems": ["ubuntu-latest", "windows-latest"],
+    "eda_job": ["Icarus Verilog", "Verilator"],
+    "vendor_td_in_ci": false
+  },
+  "local_regression": {
+    "date": "2026-11-07",
+    "python": "3.11.9",
+    "pytest_result": "193 passed",
+    "python_statement_coverage_percent": 67,
+    "rtl_fixtures": {
+      "sync_fifo": {"icarus": "pass", "verilator_5_048": "pass"},
+      "spi_master": {"icarus": "pass", "verilator_5_048": "pass"},
+      "apb_pwm_timer": {"icarus": "pass", "verilator_5_048": "pass"}
+    }
+  },
+  "local_toolchain": {
+    "python": "3.11.9",
+    "icarus_verilog": "12.0 devel / 2693dd32b",
+    "verilator": "5.048",
+    "anlogic_td": "6.2.168.116"
+  },
+  "existing_evidence": {
+    "rv32i_programs_per_core": 114,
+    "rv32i_retired_instructions_per_core": 18099,
+    "rv32i_board_function_readback": "not_captured",
+    "hdmi_cube_trials": ["18/18 frames accepted", "30/30 frames accepted"],
+    "tinystories_board_validation": "documented_in_tinystories_results",
+    "engineering_signoff": "not_granted"
+  },
+  "open_items": [
+    "CPU STA endpoint and IO constraint review",
+    "RISC-V Architectural Certification Tests and Spike integration",
+    "formal equivalence and bounded/unbounded formal evidence",
+    "CDC/RDC and post-route simulation",
+    "RTL functional coverage closure",
+    "HX1P35A official schematic and revision pin audit",
+    "RGB(0,0,0) HDMI receiver lock root cause",
+    "first successful GitHub Actions run"
+  ]
+}

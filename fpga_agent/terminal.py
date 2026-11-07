@@ -54,6 +54,13 @@ COMMANDS = {
 }
 
 
+def child_environment(environment: dict[str, str]) -> dict[str, str]:
+    """Return an isolated environment without host-only coverage hooks."""
+    return {key: value for key, value in environment.items()
+            if not key.startswith("COV_CORE_")
+            and key not in {"COVERAGE_FILE", "COVERAGE_PROCESS_START"}}
+
+
 def timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -388,8 +395,12 @@ class ProcessRunner:
             raise ValueError('line_limit must be 4,096..4,000,000 characters')
         if self.cancelled:
             return 130
+        # Test-runner instrumentation belongs to the host process. Propagating
+        # pytest-cov hooks into design tools and isolated workspaces can create
+        # untracked .coverage files and invalidate workspace fingerprints.
+        child_env = child_environment(env)
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
-        self.process = await asyncio.create_subprocess_exec(*argv, cwd=cwd, env=env,
+        self.process = await asyncio.create_subprocess_exec(*argv, cwd=cwd, env=child_env,
             stdin=asyncio.subprocess.PIPE if stdin_text is not None else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, **options)
         feeder = None

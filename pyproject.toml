@@ -3,15 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hx1p35a-fpga-agent"
+name = "icforge"
 version = "0.6.0"
-description = "AI-assisted RTL to simulation and Anlogic TD implementation flow for HX1P35A"
+description = "AI-assisted digital IC design and verification agent"
 requires-python = ">=3.11"
 dependencies = ["textual>=8.2.8,<9", "rich>=13.3.3,<16"]
 
 [project.optional-dependencies]
 tinyllm = ["numpy>=2,<3", "pyserial>=3.5,<4"]
 video = ["Pillow>=10"]
+test = ["pytest>=8.3,<9", "pytest-cov>=5,<7"]
 
 [project.scripts]
 fpga-agent = "fpga_agent.cli:main"
@@ -19,8 +20,23 @@ icforge = "fpga_agent.cli:main"
 ic-forge = "fpga_agent.cli:main"
 
 [tool.setuptools]
-packages = ["fpga_agent"]
 include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["fpga_agent*"]
+namespaces = true
 
 [tool.setuptools.package-data]
 fpga_agent = ["templates/**/*", "*.tcss"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["fpga_agent"]
+omit = ["fpga_agent/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

@@ -1,26 +1,64 @@
-# v0.4.0 工程流程验收
+# IC Forge 0.6.0 工程验证状态
 
-执行日期：2026-11-04。目标：HX1P35A / PH1P35MDG324；实现工具：本机 Tang Dynasty V6.2.168116。
+更新日期：2026-11-07。本文汇总源码、当前本机工具和已有工程证据；它不把历史试验自动升级为本次回归，也不授予工程签核。
 
-本轮重新使用已有的心跳和三份 RV32I RTL，运行 Icarus 验证、TD 综合、布局布线、完整交付，并在新的临时目录解压交付包后重新检查全部仿真/实现证据。没有调用新的在线模型生成 CPU，也没有下载开发板。
+## 软件与工具链
 
-| 工程 | 仿真 | Setup WNS ns | Hold WNS ns | Setup/Hold TNS ns | STA 覆盖率 | 交付解压后证据 |
-|---|---|---:|---:|---|---:|---|
-| 心跳 | 通过 | 16.332 | 0.154 | 0 / 0 | 88.51% | 通过 |
-| RV32I 单周期 | 114 程序，64 随机种子，SoC 通过 | 0.463 | 0.073 | 0 / 0 | 92.36% | 通过 |
-| RV32I 多周期 | 114 程序，64 随机种子，SoC 通过 | 7.284 | 0.034 | 0 / 0 | 92.24% | 通过 |
-| RV32I 流水线 | 114 程序，64 随机种子，SoC 通过 | 0.696 | 0.039 | 0 / 0 | 92.85% | 通过 |
+| 项目 | 固定/实测版本 | 当前状态 |
+|---|---|---|
+| IC Forge | 0.6.0；发行包名已统一为 `icforge`，Python 导入路径仍兼容 `fpga_agent` | 已更新 `pyproject.toml` |
+| Python | 最低 3.11；本机 3.11.9；CI 矩阵 3.11/3.12 | 依赖解析锁在 `uv.lock` |
+| Icarus Verilog | 本机 12.0 devel；CI 安装 Ubuntu 仓库版本 | 可执行文件在 `.tools/icarus/bin/iverilog.exe`，本机未加入 PATH |
+| Verilator | 本机 5.048 / MSYS2 UCRT64 | 已安装；历史 `blocked` 报告需通过本次严格 lint 刷新 |
+| Anlogic TD | 本机 6.2.168.116 | Windows 本机可用；GitHub runner 不含该厂商工具 |
 
-最终自动化回归：**79 项通过**。检查包括伪 PASS、零退出码的断言 ERROR、缺失/重复需求检查、验证器被自动修复改弱、include/ROM/顶层/源文件顺序变化、CPU 用例或覆盖点缺失、TNS 异常、源快照和位流变化、打包过程中源文件被短暂替换，以及 TUI 输入排队和审查结果展示。
+CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 3.11/3.12 × Windows/Linux 单元回归；独立 Ubuntu 作业安装 Icarus 与 Verilator，并对 FIFO、SPI、APB 三个固定夹具执行仿真和严格 lint。工作流目前尚未由 GitHub runner 执行，首次远端绿灯仍待确认。
 
-安装包额外检查在临时目录安装 wheel，核验模块来自该 wheel、版本为 0.4.0、TUI 样式与新增工程审查模块随包提供。逐工程校验值见 [机器记录](engineering-validation.json)，CPU 覆盖与资源统计见 [suite-report.json](../benchmarks/suite-report.json)。
+## 本机回归与覆盖率
+
+2026-11-07 在 Windows / Python 3.11.9 使用已锁定依赖运行完整回归：**193 passed**，总 statement coverage **67%**。关键 agent/工具路径的行覆盖率如下：
+
+| 模块 | 覆盖率 | 说明 |
+|---|---:|---|
+| `cli.py` | 52% | 新增 CLI/parser 测试；复杂 TD 与硬件分支仍有空白 |
+| `autonomy.py` | 79% | 长任务恢复、后台 worker 和覆盖变量隔离已纳入回归 |
+| `orchestration.py` | 86% | 调度、隔离 worktree、审查、暂停恢复测试 |
+| `task_planner.py` | 86% | 结构化决策、工作区和凭据脱敏测试 |
+| `agent_backends.py` | 87% | 由 orchestration adapter 测试覆盖 |
+| `ftdi.py` | 84% | Windows CI 通过模拟 D2XX 驱动测试，不依赖接入真实板卡 |
+| `bitbang_relay.py` | 84% | 大块双向 socket 传输测试 |
+| `hardware_evidence.py` | 73% | CRC、logits、UART 和 checker 指纹失效场景 |
+| `cpu_agent.py` | 67% | CPU 候选接口与修复流程测试 |
+| `context_budget.py` | 68% | 保留用户约束与超限拒绝测试 |
+
+本机还对 `sync_fifo`、`spi_master`、`apb_pwm_timer` 各执行了真实 Icarus 自检仿真和 Verilator 5.048 `-Wall` lint，六个阶段均通过。此处覆盖率是 Python agent 代码覆盖，不等于 RTL 功能覆盖；尚未达到 100%，也不构成芯片签核。
+
+## 已有硬件/设计证据
+
+- **RV32I**：单周期、多周期、两级流水线均有 114 个程序、18,099 条退休指令的独立参考比对及 TD 实现记录。TD 报告 STA 覆盖率分别为 92.36%、92.24%、92.85%；正 setup/hold WNS 和零 TNS 不代表约束完整。单周期核曾通过 JTAG SRAM 配置，但 R11 串行签名没有外部采集，因此不把仿真分数说成板上测得性能。详见 [CPU 结果](riscv-results.md)。
+- **HDMI 立方体**：两次独立 SRAM 重载，采集卡在等待锁定后分别接受 18/18 与 30/30 个视频样本，均识别到多个旋转姿态。setup/hold WNS 为 +5.746/+0.066 ns，TNS 为 0；默认 RGB(1,1,1) 有实板证据。RGB(0,0,0) 仍会在当前链路失锁，根因未证实。详见 [HDMI 记录](hdmi-cube-flow.md)。
+- **TinyStories260K**：模型完整性、logits 和生成 token 有板上验收记录；其处理器/固件范围及样本见 [TinyStories 记录](tinystories-flow.md)。
+
+这些证据来自不同日期和不同工程配置，不可合并成一次全仓通过。相关交付当前仍把 `engineering_signoff` 标为 `not_granted`。
 
 ## 未关闭事项
 
-- 本机未安装 Verilator：严格 lint 状态为 `blocked`，没有把 Icarus 编译当作 lint 完成。
-- STA 覆盖率低于 100%：须审查未约束端点、IO delay、时钟复位和例外条件。非负 WNS 与零 TNS 仅说明已分析路径达到当前约束。
-- 旧 CPU 示例缺少单独的原始 brief；新 `cpu-design` 会自动保存执行契约和架构需求。没有追写一份文档冒充原始审阅。
-- 普通生成 testbench 仍需独立审阅或参考模型；需求标记不能证明检查语义充分。
-- 代码覆盖闭合、正式 CDC/RDC、formal/LEC、post-route 仿真和实板观察尚未完成。
+1. CPU STA 未覆盖端点、IO delay、时钟/复位例外和板卡 revision 尚未逐项对照官方资料闭合。HDMI 一项的高覆盖率不能替代 CPU 约束审查。
+2. 尚未集成 Spike / RISC-V Architectural Certification Tests，也没有 RV32I 形式证明或 LEC。
+3. CDC/RDC、post-route 仿真、RTL 功能覆盖闭合和 ASIC 物理签核尚未完成。
+4. 普通 RTL 的模型生成 testbench 仍需要独立审阅；需求 ID 出现不等于断言语义充分。
+5. HX1P35A 引脚表仍需对照所用板卡 revision 的官方原理图复核。
+6. RGB(0,0,0) HDMI 失锁尚无电气或接收端根因结论。
+7. Python agent 总覆盖率为 67%；`cli.py`、`tinyllm.py`、`tinyllm_hardware.py`、`ui_worker.py`、视频捕获及 programmer 的部分错误分支仍需补测。
+8. CI、Windows/Linux 矩阵和严格 Verilator lint 已编排，只有 runner 实际完成后才能记为 CI 通过；TD 实现保留为需安路本机执行的门禁。
 
-因此四份交付均标记 `artifact_ready=true`、`engineering_signoff=not_granted`，随包保留各职责的待办项。方法与参考资料见 [工程审查流程](engineering-workflow.md)。
+## 复现命令
+
+```powershell
+uv sync --locked --all-extras
+uv run pytest --cov=fpga_agent --cov-report=term-missing
+uv run python -m fpga_agent verify examples/agent_validation/sync_fifo
+uv run python -m fpga_agent lint examples/agent_validation/sync_fifo
+```
+
+完整逐项门禁见[工程审查流程](engineering-workflow.md)，本地工具版本见[`toolchain.json`](../toolchain.json)，机器可读摘要见[`engineering-validation-current.json`](engineering-validation-current.json)。
