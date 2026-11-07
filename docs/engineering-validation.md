@@ -12,7 +12,7 @@
 | Verilator | 本机 5.048 / MSYS2 UCRT64 | 已安装；历史 `blocked` 报告需通过本次严格 lint 刷新 |
 | Anlogic TD | 本机 6.2.168.116 | Windows 本机可用；GitHub runner 不含该厂商工具 |
 
-CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 3.11/3.12 × Windows/Linux 单元回归；独立 Ubuntu 作业安装 Icarus 与 Verilator，并对 FIFO、SPI、APB 三个固定夹具执行仿真和严格 lint。工作流目前尚未由 GitHub runner 执行，首次远端绿灯仍待确认。
+CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 3.11/3.12 × Windows/Linux 单元回归；独立 Ubuntu 作业安装 Icarus 与 Verilator，并对 FIFO、SPI、APB 三个固定夹具执行仿真和严格 lint。GitHub Actions 已在提交 `a88bfe17a5e2a1e960dbb3314cf5e0c0f9abe935` 全部通过：[本次运行](https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42374732568)。Anlogic TD 未纳入托管 runner，仍由本机工程门禁负责。
 
 ## 本机回归与覆盖率
 
@@ -50,7 +50,7 @@ CI 定义于 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：Python 
 5. HX1P35A 引脚表仍需对照所用板卡 revision 的官方原理图复核。
 6. RGB(0,0,0) HDMI 失锁尚无电气或接收端根因结论。
 7. Python agent 总覆盖率为 67%；`cli.py`、`tinyllm.py`、`tinyllm_hardware.py`、`ui_worker.py`、视频捕获及 programmer 的部分错误分支仍需补测。
-8. CI、Windows/Linux 矩阵和严格 Verilator lint 已编排，只有 runner 实际完成后才能记为 CI 通过；TD 实现保留为需安路本机执行的门禁。
+8. CI 当前已通过 Windows/Linux × Python 3.11/3.12 矩阵及三个 HDL 夹具；Anlogic TD full 和板级功能验收仍需在安路本机/实际开发板执行。
 
 ## 复现命令
 

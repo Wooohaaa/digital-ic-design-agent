@@ -5,7 +5,10 @@
   "python_import_package": "fpga_agent",
   "ci": {
     "workflow": ".github/workflows/ci.yml",
-    "status": "configured_not_yet_observed_on_github",
+    "status": "passed",
+    "last_run_id": "42374732568",
+    "last_run_commit": "a88bfe17a5e2a1e960dbb3314cf5e0c0f9abe935",
+    "last_run_url": "https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42374732568",
     "python_matrix": ["3.11", "3.12"],
     "operating_systems": ["ubuntu-latest", "windows-latest"],
     "eda_job": ["Icarus Verilog", "Verilator"],
@@ -44,6 +47,6 @@
     "RTL functional coverage closure",
     "HX1P35A official schematic and revision pin audit",
     "RGB(0,0,0) HDMI receiver lock root cause",
-    "first successful GitHub Actions run"
+    "Anlogic TD full and physical board acceptance remain local hardware gates"
   ]
 }
