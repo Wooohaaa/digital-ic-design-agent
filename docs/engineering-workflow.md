@@ -20,6 +20,7 @@ IC Forge 把规格、设计、验证、实现、集成的职责变成可追溯�
 ```powershell
 icforge lint my-design
 icforge verify my-design
+icforge coverage my-design
 icforge review my-design --scope simulation
 icforge flow my-design
 icforge review my-design --strict
@@ -33,7 +34,10 @@ icforge review my-design --strict
 |---|---|---|
 | 需求 | 原始 brief、设计说明、逐项验证计划 | 需求完整性、假设与验收条件的审阅 |
 | RTL 设计 | 当前源码的严格 Verilator lint 证据 | 结构设计、时钟复位、CDC/RDC、例外约束审阅 |
-| 功能验证 | 仿真退出状态、断言错误、需求检查、CPU 独立参考 | 普通生成 testbench 的独立性、覆盖率闭合 |
+| 综合 | 当前 RTL 的 Yosys 厂商中立网表与单元/触发器估算（可选 SYNTH-001） | 面积/时序/功耗与厂商实现审阅；估算不等于物理结果 |
+| 厂商中立实现 | 按目标 profile 分派的实现后端证据（可选 IMPL-003）：open iCE40 真实位流、Anlogic TD 映射或通用综合 | 位流不等于实板通过；未做布线后仿真 |
+| 功能验证 | 仿真退出状态、断言错误、需求检查、CPU 独立参考 | 普通生成 testbench 的独立性、功能覆盖率闭合 |
+| 结构覆盖 | 当前 RTL 的 Verilator 结构覆盖（可选 COV-001）：line/branch/toggle/expr | 结构覆盖不等于功能/断言覆盖；未覆盖点需补 testbench 后重跑 |
 | FPGA 实现 | 仿真有效性、源文件快照、setup/hold WNS 与 TNS、位流哈希 | 时序约束完整性、板卡 revision 与官方引脚资料确认 |
 | 交付 | 包内实际字节校验、输入和报告未变化、原子替换交付包 | 实板观测与工程签核 |
 
@@ -69,7 +73,7 @@ TD 快照包含 RTL 的头文件与数据依赖，编译文件顺序也纳入实
 
 交付先写独立临时 ZIP，完成后重新检查源文件、报告、实现证据和 ZIP 内的 RTL/验证文件/位流字节。若内容变化，拒绝发布该临时包，并保留上一份交付。`MANIFEST.sha256` 给出包内每个文件的 SHA-256，ZIP 旁边的 `.zip.sha256` 校验整个交付包。
 
-普通仿真材料可通过 `--simulation-only` 交付；完整 FPGA 包必须通过当前仿真与实现证据门禁，并包含工程审查报告。代码覆盖、formal/LEC、post-route 仿真、实板验证尚未接入，不会作为已完成工作报告。
+普通仿真材料可通过 `--simulation-only` 交付；完整 FPGA 包必须通过当前仿真与实现证据门禁，并包含工程审查报告。逻辑等价（`DV-006`）、属性检查（`DV-007`）、厂商中立综合（`SYNTH-001`）、class 化环境（`DV-008`）、厂商中立实现（`IMPL-003`）与 RTL 结构覆盖（`COV-001`）已作为可选门禁接入（见 [formal.md](formal.md)、[synth.md](synth.md)、[systemverilog.md](systemverilog.md)、[svsim.md](svsim.md)、[backends.md](backends.md)、[coverage.md](coverage.md)）。对非安路、有 `bitstream` 能力的目标，`DELIV-001` 记录厂商中立交付证据，`artifact_ready` 的 `fpga` 范围据此可由安路 TD 证据（`IMPL-001`）**或**开放后端位流证据满足；`package` 会打包 `.bin` 并在 `delivery.json` 写 `vendor_neutral_bitstream`。功能/断言覆盖、CDC/RDC、post-route 仿真、实板验证尚未接入，不会作为已完成工作报告。`IMPL-003`/`COV-001`/`DELIV-001` 均为可选门，不把开放后端位流或结构覆盖说成实板通过。
 
 ## 方法来源
 
@@ -79,4 +83,4 @@ TD 快照包含 RTL 的头文件与数据依赖，编译文件顺序也纳入实
 - [Icarus 编译选项](https://steveicarus.github.io/iverilog/usage/command_line_flags.html)：`-grelative-include` 与 `-I` 的依赖搜索规则。
 - [Verilator 参数](https://verilator.org/guide/latest/exe_verilator.html)：严格 lint 路径及 warning fatal 行为。
 - [RISC-V 架构测试](https://github.com/riscv/riscv-arch-test)：官方明确指出架构认证测试不能替代完整处理器验证；当前尚未接入 ACT4。
-- [SymbiYosys 配置参考](https://github.com/YosysHQ/sby/blob/main/docs/source/reference.rst)：后续形式验证必须分别记录 prove/bmc/cover、假设和深度，不能把有界通过写成无界证明。
+- [SymbiYosys 配置参考](https://github.com/YosysHQ/sby/blob/main/docs/source/reference.rst)：`icforge formal` 借鉴其分别记录 prove/bmc/cover、假设和深度、不把有界通过写成无界证明的做法；本项目不使用其运行时，直接调用 Yosys `sat`。

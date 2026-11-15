@@ -1,0 +1,64 @@
+{
+  "project": "validation-tiny-lpu",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "tiny_lpu",
+  "testbench_top": "tb_tiny_lpu",
+  "rtl_sources": [
+    "rtl/tiny_lpu.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_tiny_lpu.sv"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "start": "input",
+    "wmem_wren": "input",
+    "wmem_addr": "input",
+    "wmem_wdata": "input",
+    "act_valid": "input",
+    "act_in": "input",
+    "out": "output",
+    "done": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "start",
+    "wmem_wren",
+    "wmem_addr",
+    "wmem_wdata",
+    "act_valid",
+    "act_in",
+    "out",
+    "done"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_tiny_lpu.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_tiny_lpu.sv": "aa5b31bb46d5f852ceb2802270b10d9bd677bf6548a7e066285e2b65395fa54a"
+  },
+  "checks": [
+    "reset clears accumulators, index, running and done",
+    "idle until start, then streams from index 0",
+    "per-MAC dot product vs independent 32-bit wraparound reference model",
+    "done asserts after NW activations and persists",
+    "second streaming run with fresh weights and activations",
+    "partial stream (act_valid paused mid-stream) completes correctly",
+    "reset clears accumulators after a completed run"
+  ]
+}
+
+
+

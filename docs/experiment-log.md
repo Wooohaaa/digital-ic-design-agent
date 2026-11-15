@@ -23,4 +23,4 @@ HX1P35A HDMI 设计做过两次独立 SRAM 下载及采集卡验收，详见[实
 
 ## Agent 调度和验证夹具
 
-`sync_fifo`、`spi_master`、`apb_pwm_timer` 夹具用于检验多 agent 分工、可信 testbench、Icarus 仿真和 Verilator lint。它们不声明板级时序签核；当前门禁与执行命令见[验证路线图](agent-validation-roadmap.md)。
+`sync_fifo`、`spi_master`、`apb_pwm_timer` 夹具用于检验多 agent 分工、可信 testbench、Icarus 仿真和 Verilator lint；`sv_datapath`、`sv_class_env` 与 `ice40_pwm` 夹具覆盖 SystemVerilog 支持、最小 class 化（UVM 风格）验证环境与厂商中立 open iCE40 实现/结构覆盖。它们不声明板级时序签核；当前门禁与执行命令见[验证路线图](agent-validation-roadmap.md)。

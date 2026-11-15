@@ -1,0 +1,63 @@
+{
+  "project": "validation-sv-class-env",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "alu8",
+  "testbench_top": "tb_alu8",
+  "rtl_sources": [
+    "rtl/alu8.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_alu8.sv"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "en": "input",
+    "a": "input",
+    "b": "input",
+    "op": "input",
+    "y": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "en",
+    "a",
+    "b",
+    "op",
+    "y"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_alu8.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_alu8.sv": "6dca5932c1a83daa449e31cc1157e9a824cc78bc275df65a3ae09f46853c7682"
+  },
+  "svsim": {
+    "top": "tb_alu8_env",
+    "sources": [
+      "rtl/alu8.sv",
+      "verif/alu8_if.sv",
+      "verif/alu8_txn.sv",
+      "verif/alu8_driver.sv",
+      "verif/alu8_scoreboard.sv",
+      "verif/tb_alu8_env.sv"
+    ]
+  },
+  "checks": [
+    "reset clears y",
+    "add/subtract/and/or reference model",
+    "randomized class transactions",
+    "class driver and scoreboard"
+  ]
+}

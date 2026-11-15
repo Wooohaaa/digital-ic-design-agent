@@ -118,8 +118,14 @@ def input_hashes(project: Path,manifest: dict) -> dict[str,str]:
     # Testbenches belong to simulation evidence, not to the synthesized netlist.
     # A stronger verifier can be rerun without rebuilding unchanged hardware.
     result=hdl_input_hashes(project, manifest['rtl_sources'])
-    for name in [manifest['board_constraints'],manifest['timing_constraints'],'board/hx1p35a.json']:
+    required=[manifest['board_constraints'], manifest.get('timing_constraints')]
+    for name in required+['board/hx1p35a.json']:
+        if not name:
+            continue
         path=(project/name).resolve()
+        if name == 'board/hx1p35a.json' and not path.is_file():
+            # Vendor-neutral targets do not ship the Anlogic board file.
+            continue
         if project.resolve() not in path.parents:raise ValueError(f'input outside project: {name}')
         result[Path(name).as_posix()]=sha(path)
     keys=('device_family','device','top_module','testbench_top','board_io','verification','board_signature','rtl_sources')

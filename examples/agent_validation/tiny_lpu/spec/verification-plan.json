@@ -1,0 +1,11 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears every accumulator, the shared index, running and done"},
+    {"id": "REQ-002", "description": "The engine stays idle until start is pulsed, then streams from index 0"},
+    {"id": "REQ-003", "description": "Each MAC accumulator equals the 32-bit wraparound dot product of its weight bank and the activation stream"},
+    {"id": "REQ-004", "description": "done asserts after NW activations and stays asserted while the engine is halted"},
+    {"id": "REQ-005", "description": "A second streaming run with fresh weights and activations produces correct results"},
+    {"id": "REQ-006", "description": "A partial stream (act_valid deasserted mid-stream, then resumed) still completes correctly"},
+    {"id": "REQ-007", "description": "Reset clears all accumulators and done after a completed run"}
+  ]
+}

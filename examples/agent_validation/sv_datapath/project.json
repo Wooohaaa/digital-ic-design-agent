@@ -1,0 +1,57 @@
+{
+  "project": "validation-sv-datapath",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "sv_datapath",
+  "testbench_top": "tb_sv_datapath",
+  "rtl_sources": [
+    "rtl/sv_datapath.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_sv_datapath.sv"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "load": "input",
+    "start": "input",
+    "shift_en": "input",
+    "din": "input",
+    "sum": "output",
+    "shift_out": "output",
+    "busy": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "load",
+    "start",
+    "shift_en",
+    "din",
+    "sum",
+    "shift_out",
+    "busy"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_sv_datapath.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_sv_datapath.sv": "66fec54011fa5acbe82dec0b541db84dd58726d0480c4eb12a55b72f071d5975"
+  },
+  "checks": [
+    "reset",
+    "accumulate DEPTH beats",
+    "busy timing",
+    "generate shift register",
+    "deterministic random runs"
+  ]
+}

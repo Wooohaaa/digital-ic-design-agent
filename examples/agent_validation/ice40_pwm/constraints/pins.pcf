@@ -1,0 +1,18 @@
+# iCEstick (iCE40HX1K-TQ144) pin map for the PWM breathing-LED fixture.
+# This is a fixture pin map for the open-source flow; it is not an approved
+# board revision or a claim of electrical validation.
+set_io clk 21
+set_io rst_n 78
+set_io duty[0] 44
+set_io duty[1] 45
+set_io duty[2] 47
+set_io duty[3] 48
+set_io duty[4] 56
+set_io duty[5] 62
+set_io duty[6] 63
+set_io duty[7] 37
+set_io pwm 99
+set_io level[0] 98
+set_io level[1] 97
+set_io level[2] 96
+set_io level[3] 95

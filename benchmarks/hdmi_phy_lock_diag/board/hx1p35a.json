@@ -1,0 +1,17 @@
+{
+  "board": "HX1P35A HDL2604",
+  "device": "PH1P35MDG324",
+  "device_family": "ph1",
+  "nominal_system_clock_hz": 50000000,
+  "source": "User-supplied HDL2604 board manual pages 14/15/20/21 and HX1P35B_FT_40P_2/7 schematics",
+  "signals": {
+    "I_sys_clk": {"pin": "C4", "direction": "input", "io_standard": "LVCMOS33"},
+    "O_hdmi_data_p[0]": {"pin": "G16", "differential_partner": "H16", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_data_p[1]": {"pin": "F17", "differential_partner": "E18", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_data_p[2]": {"pin": "H14", "differential_partner": "H13", "direction": "output", "io_standard": "TMDS33"},
+    "O_hdmi_clk_p": {"pin": "C17", "differential_partner": "D18", "direction": "output", "io_standard": "TMDS33"},
+    "O_debug_led[0]": {"pin": "D10", "direction": "output", "io_standard": "LVCMOS33", "meaning": "active-high LED1: power-on timer completed"},
+    "O_debug_led[1]": {"pin": "E10", "direction": "output", "io_standard": "LVCMOS33", "meaning": "active-high LED2: PLL lock"},
+    "O_debug_led[2]": {"pin": "C6", "direction": "output", "io_standard": "LVCMOS33", "meaning": "active-high LED3: pixel-clock heartbeat"}
+  }
+}

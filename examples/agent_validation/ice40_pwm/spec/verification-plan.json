@@ -1,0 +1,7 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears pwm to 0 and level to 0"},
+    {"id": "REQ-002", "description": "High-cycle count over 256 edges equals the requested duty"},
+    {"id": "REQ-003", "description": "Registered level equals counter[7:4]"}
+  ]
+}

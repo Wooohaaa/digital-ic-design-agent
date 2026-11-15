@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .coverage*
 coverage.xml
+coverage.dat
 build/
 dist/
 *.vvp
@@ -26,3 +27,8 @@ deliverables/
 benchmarks/*/firmware/*.elf
 benchmarks/*/firmware/*.map
 benchmarks/*/firmware/firmware.bin
+
+# scratch / local experiment output
+tmp/
+# large media assets (promotional film renders, not part of the design repo)
+media/

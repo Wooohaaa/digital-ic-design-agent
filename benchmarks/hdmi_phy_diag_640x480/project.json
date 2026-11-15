@@ -1,0 +1,52 @@
+{
+  "project": "hdmi_phy_diag_640x480",
+  "target": "Anlogic PH1P35MDG324",
+  "board": "hx1p35a",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "hdmi_cube_top",
+  "testbench_top": "tb_hdmi_diag",
+  "rtl_sources": [
+    "rtl/video_timing.v",
+    "rtl/tmds_encoder.v",
+    "rtl/hdmi_phy.v",
+    "rtl/color_bars.v",
+    "rtl/hdmi_cube_top.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_hdmi_diag.sv"
+  ],
+  "board_constraints": "constraints/hx1p35a.adc",
+  "timing_constraints": "constraints/hx1p35a.sdc",
+  "board_io": {
+    "I_sys_clk": "I_sys_clk",
+    "O_hdmi_data_p[0]": "O_hdmi_data_p[0]",
+    "O_hdmi_data_n[0]": "O_hdmi_data_n[0]",
+    "O_hdmi_data_p[1]": "O_hdmi_data_p[1]",
+    "O_hdmi_data_n[1]": "O_hdmi_data_n[1]",
+    "O_hdmi_data_p[2]": "O_hdmi_data_p[2]",
+    "O_hdmi_data_n[2]": "O_hdmi_data_n[2]",
+    "O_hdmi_clk_p": "O_hdmi_clk_p",
+    "O_hdmi_clk_n": "O_hdmi_clk_n",
+    "O_hdmi_hpd": "O_hdmi_hpd"
+  },
+  "top_ports": {
+    "I_sys_clk": "input",
+    "O_hdmi_data_p": "output",
+    "O_hdmi_data_n": "output",
+    "O_hdmi_clk_p": "output",
+    "O_hdmi_clk_n": "output",
+    "O_hdmi_hpd": "output"
+  },
+  "unmapped_top_ports": [],
+  "td_full_allowed": true,
+  "checks": [
+    "Static eight-bar RGB pattern",
+    "640x480 timing and blanking counters",
+    "PLL startup, serializer differential output and HDMI power-enable"
+  ],
+  "verification": {
+    "kind": "hdmi-phy-diagnostic",
+    "verilog_defines": ["ICFORGE_SIM"]
+  }
+}

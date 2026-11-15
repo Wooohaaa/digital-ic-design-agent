@@ -1,0 +1,11 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears the PC, running, done and every lane register file"},
+    {"id": "REQ-002", "description": "The core stays idle until start is pulsed, then fetches and executes from instruction address 0"},
+    {"id": "REQ-003", "description": "Each lane computes the 4-element dot product of its a and b vectors with 32-bit wraparound matching the reference model"},
+    {"id": "REQ-004", "description": "Each lane stores its result to its own dmem bank at offset 8, leaving other lanes and input words untouched"},
+    {"id": "REQ-005", "description": "done asserts after EXIT and stays asserted while the core is halted"},
+    {"id": "REQ-006", "description": "MOVI/MOV/ADD/SUB/MUL and the SETPLT true path produce the directed microtest results"},
+    {"id": "REQ-007", "description": "BRA skips the instructions between the branch and its target, and the SETPLT false path yields 0"}
+  ]
+}

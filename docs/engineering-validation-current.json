@@ -1,5 +1,5 @@
 {
-  "report_date": "2026-11-07",
+  "report_date": "2026-11-14",
   "icforge_version": "0.6.0",
   "package_name": "icforge",
   "python_import_package": "fpga_agent",
@@ -11,30 +11,58 @@
     "last_run_url": "https://github.com/Wooohaaa/digital-ic-design-agent/actions/runs/42375073989",
     "python_matrix": ["3.11", "3.12"],
     "operating_systems": ["ubuntu-latest", "windows-latest"],
-    "eda_job": ["Icarus Verilog", "Verilator"],
+    "eda_job": ["Icarus Verilog", "Verilator", "Yosys (yowasp)", "nextpnr-ice40 + icepack (yowasp)"],
     "vendor_td_in_ci": false
   },
   "local_regression": {
-    "date": "2026-11-07",
+    "date": "2026-11-14",
     "python": "3.11.9",
-    "pytest_result": "193 passed",
-    "python_statement_coverage_percent": 67,
+    "pytest_result": "341 passed, 1 skipped",
+    "python_statement_coverage_percent": 68,
     "rtl_fixtures": {
-      "sync_fifo": {"icarus": "pass", "verilator_5_048": "pass"},
+      "sync_fifo": {"icarus": "pass", "verilator_5_048": "pass", "lec": "pass", "formal": "pass", "synth": "pass", "cdc": "pass"},
       "spi_master": {"icarus": "pass", "verilator_5_048": "pass"},
-      "apb_pwm_timer": {"icarus": "pass", "verilator_5_048": "pass"}
+      "apb_pwm_timer": {"icarus": "pass", "verilator_5_048": "pass"},
+      "sv_datapath": {"icarus": "pass", "verilator_5_048": "pass", "lec": "pass", "synth": "pass", "language": "SystemVerilog"},
+      "sv_class_env": {"icarus": "pass", "verilator_binary_class_env": "pass", "verilator_5_048": "pass", "lec": "pass", "synth": "pass", "language": "SystemVerilog"},
+      "ice40_pwm": {"icarus": "pass", "verilator_5_048": "pass", "lec": "pass", "synth": "pass", "ice40_implement": "pass", "bitstream": "pass", "structural_coverage": "pass", "cdc": "pass", "timing": "blocked", "timing_signoff": "pass", "post_route": "blocked", "release": "pass", "language": "Verilog", "target": "lattice-ice40-hx1k"},
+      "functional_cov": {"verilator_binary_coverage": "pass", "structural_coverage": "pass", "functional_coverage": "pass", "assertions": "pass", "language": "SystemVerilog"},
+      "cdc_dual_clk": {"icarus": "pass", "cdc": "review_required"},
+      "tiny_gpu": {"icarus": "pass", "verilator_5_048": "pass", "synth": "pass", "structural_coverage": "pass", "cdc": "pass", "lec": "blocked", "language": "SystemVerilog", "rsi_stage": "4", "architecture": "lockstep-SIMT-PTX-subset"},
+      "tiny_lpu": {"icarus": "pass", "verilator_5_048": "pass", "synth": "pass", "structural_coverage": "pass", "cdc": "pass", "language": "SystemVerilog", "rsi_stage": "5", "architecture": "tensor-streaming-GEMV"},
+      "tiny_train_gpu": {"icarus": "pass", "verilator_5_048": "pass", "synth": "pass", "structural_coverage": "pass", "cdc": "pass", "training": "pass", "language": "SystemVerilog", "rsi_stage": "6", "architecture": "GEMM-ReLU-compute-core"},
+      "tiny_soc": {"icarus": "pass", "verilator_5_048": "pass", "synth": "pass", "structural_coverage": "pass", "coverage_waived_unreachable": 19, "cdc": "pass", "lec": "blocked", "language": "SystemVerilog", "rsi_stage": "7", "architecture": "rv32i-cpu-plus-dma-2d-scatter-gather-descriptor-chains-interrupt-two-bus-masters-axili-like-handshaking-bus-direct-mapped-blocking-instruction-cache-direct-mapped-nonblocking-data-cache-GEMM-accelerator-UART"}
     }
   },
   "candidate_changes": {
-    "status": "not_run",
-    "scope": ["RTL mutation audit", "task trajectory metrics", "three new engineering skills"],
-    "note": "Static Python syntax parsing and diff whitespace checks passed; Python/HDL runtime suites have not been run on this candidate."
+    "status": "passed",
+    "scope": [
+      "formal property checks (BMC/induction)",
+      "logic equivalence check (LEC)",
+      "vendor-neutral RTL-to-netlist synthesis (Yosys)",
+      "SystemVerilog fixture pinning always_ff/always_comb, typedef enum/struct, $clog2 and generate support",
+      "minimal class-based (UVM-style) verification environment via Verilator --binary",
+      "vendor-neutral multi-backend implementation layer: target profiles, open iCE40 backend (synth_ice40 -> nextpnr-ice40 -> icepack), anlogic TD adapter, generic synthesis backend",
+      "RTL structural coverage via Verilator --binary --coverage (line/branch/toggle/expr) and COV-001 review gate",
+      "vendor-neutral delivery integration: DELIV-001 gate, artifact_ready accepts open-backend bitstream, package writes delivery.json vendor_neutral_bitstream",
+      "icforge implement / icforge targets / icforge coverage CLI",
+      "Stage 4 (CDC/RDC): icforge cdc source-level clock/reset domain crossing heuristic (fpga_agent/cdc.py), CDC-001 optional gate, cdc_dual_clk fixture",
+      "Stage 5 (functional/assertion coverage): coverage.py COVERAGE_VERSION=2 with --functional-coverage, cover property (user) points + concurrent-assertion failure detection, COV-002 optional gate, functional_cov fixture",
+      "Stage 6 (timing/physical signoff path): fpga_agent/timing.py reads implement.json timing signoff and scaffolds post-route simulation (icesim) with honest blocked status, TIM-001 optional gate",
+      "Stage 7 (versioned release): fpga_agent/release.py aggregate review + reports/release.json, versioned package names and delivery.json release_version, icforge release CLI",
+      "DV-006/DV-007/DV-008/SYNTH-001/IMPL-003/COV-001/COV-002/CDC-001/TIM-001/DELIV-001 review gates",
+      "yowasp-yosys formal extra, yowasp-nextpnr-ice40 openfpga extra and shared Yosys backend plumbing"
+    ],
+    "note": "Full Python regression passed locally on locked dependencies (341 passed, 1 skipped, 68% statement coverage). Yosys-backed LEC/formal/synth fixtures pass on the FIFO example and dedicated RTL fixtures; synthesis output is a technology-independent gate netlist, not a vendor mapping or bitstream. The SystemVerilog support matrix is measured per tool (docs/systemverilog.md) and Icarus/Yosys have documented limits on interfaces, package ports, classes and import. The class-based environment (docs/svsim.md) is a small self-authored transaction/driver/scoreboard set, not a UVM library, and reports blocked when Verilator/C++/make are unavailable. Stage 2 adds a vendor-neutral implementation layer (docs/backends.md): the open iCE40 backend produces a real .bin bitstream through Yosys synth_ice40 -> nextpnr-ice40 -> icepack, the anlogic backend is a thin adapter over the existing TD flow, and the generic backend honestly reports synthesis-only with no place-and-route or bitstream. Stage 3 closes the verification loop on the RTL itself: icforge coverage builds and runs a self-checking testbench with Verilator --binary --coverage and parses the SystemC coverage.dat into per-source line/branch/toggle/expr structural coverage (docs/coverage.md), reported through the optional COV-001 gate; structural coverage is not functional or assertion coverage and does not claim all behavior was exercised. Stage 4 adds a source-level CDC/RDC structural heuristic (docs/cdc.md): icforge cdc splits processes by always/initial, extracts clock and reset domains, and flags signals driven in one domain and read in a disjoint one as candidates; it does not prove CDC safety, does not expand generate/netlist, and treats reset-domain hints as review items (CDC-001 optional gate; cdc_dual_clk fixture measured review_required). Stage 5 adds functional coverage on the same pipeline (docs/coverage.md): icforge coverage --functional-coverage collects cover property points (Verilator user coverage points) and treats a fired concurrent assert property as a hard fail (COV-002 optional gate, separate from COV-001); the functional_cov fixture measured 20/20 structural + 4/4 functional points with no assertion failure, and the testbench uses a reset-based assertion because Verilator samples clock-edge assertions post-NBA. Stage 6 adds the post-route timing/physical-signoff path (docs/timing.md): icforge timing summarizes the real static timing signoff recorded by nextpnr-ice40 in reports/implement.json (ice40_pwm measured PASS at 326.9 MHz vs 12.0 MHz constraint) and reports post_route_status=blocked because icesim is not available in this environment (TIM-001 optional gate); it does not fabricate post-route simulation or claim ASIC physical signoff (DV-004 still not_run). Stage 7 adds versioned release aggregation (docs/release.md): icforge release runs the full review, writes reports/release.json with the aggregate verdict and every gate status, and hands off to package with a version suffix (delivery.json carries release_version); engineering_signoff remains not_granted. Vendor-neutral delivery is now wired in: DELIV-001 records delivery evidence for a non-Anlogic bitstream-capable target, artifact_ready accepts either the Anlogic TD path or an open-backend bitstream, and package writes the .bin plus delivery.json vendor_neutral_bitstream. The iCE40 bitstream remains real but unprogrammed and not board-verified; iCE40 post-route simulation (icesim) is unavailable in this environment (no yowasp-icesim package) and is explicitly not claimed. Per-project CPU/video application is not yet done. RSI roadmap stage 4 adds the tiny_gpu fixture (examples/agent_validation/tiny_gpu): a lockstep SIMT core with 4 lanes, a PTX-like instruction subset (movi/mov/add/sub/mul/mad/ld/st/setp.lt/bra/exit), per-lane register file and data bank, and a 4-element dot-product MAC kernel. It passes icforge verify (7 REQ checks incl. 32-bit wraparound reference model), lint, synth (40938 cells/4978 flops), coverage (3158/3158 RTL points 100%), and cdc (no crossings). icforge lec times out at 300s on this multiplier-dense netlist (WASM Yosys SAT budget), a documented scaling limit; LEC is not claimed for this fixture. The fixture is a minimum inference-only SIMT engine, not a CUDA-compatible GPU: no PTX assembler, no CUDA runtime, no warp scheduler, no divergent control flow. RSI roadmap stage 5 adds the tiny_lpu fixture (examples/agent_validation/tiny_lpu): a tensor streaming processor with on-chip weight SRAM (4 banks x 16 words), a streaming activation input, a parallel MAC array, deterministic lockstep execution, and a streaming-complete done signal. It passes icforge verify (7 REQ checks incl. 32-bit wraparound reference model, second-streaming run, and paused/resumed partial stream), lint, synth (17411 cells/2186 flops), coverage (720/720 RTL points 100%), and cdc (no crossings). It is a single-layer GEMV engine, not a multi-layer transformer inference system: no sparse tensors, no mixed precision, no on-chip interconnect, no open-model end-to-end run. RSI roadmap stage 6 adds the tiny_train_gpu fixture (examples/agent_validation/tiny_train_gpu): the forward-pass compute core of a training GPU, with on-chip A/B/C SRAM, host load/read ports, a triple-nested integer GEMM (C = ReLU(A*B)) with a raw no-ReLU bypass, and a deterministic N^3-cycle loop. It passes icforge verify (7 REQ checks incl. 32-bit wraparound reference model, raw mode, second run, reset clears C), lint, synth (6907 cells/1576 flops), coverage (701/701 RTL points 100%), and cdc (no crossings). It is a single-tile integer GEMM, not a datacenter training GPU: no large matrix array, no high-bandwidth memory, no FP8/BF16 mixed precision, no interconnect. The host-side self-training loop (fpga_agent/training.py, CLI `icforge training`) trains a tiny ReLU linear model with SGD, quantizes the weights to int32, and verifies the forward pass with the same 32-bit wraparound GEMM + sign-bit ReLU math the RTL implements (default run: loss 0.282 -> 0.033, 100% forward match). This is a toy SGD loop, not a PyTorch-class training stack, and the loop is semantically aligned, not board-executed. RSI roadmap stage 7 adds the tiny_soc fixture (examples/agent_validation/tiny_soc): a minimal SoC-level integration with a memory-mapped host bus (wb_we/wb_re/wb_addr/wb_wdata/wb_rdata), an address decoder, an on-chip integer GEMM accelerator (C = ReLU(A*B), 32-bit wraparound) with A/B/C SRAM, and an 8N1 UART transmitter (BAUD_DIV cycles/bit, start/8 data LSB-first/stop). It passes icforge verify (7 REQ checks incl. 32-bit wraparound reference model and per-cycle UART capture/decode), lint, synth (8565 cells/1593 flops), coverage (716/716 RTL points 100%), and cdc (no crossings). It is a single-clock single-domain SoC tile, not a semiconductor-level architecture redesign: no CPU core, AXI/NoC, MMU, DMA, multi-clock domains, power management, or SerDes/DDR PHY. See ROADMAP.md for the full 7-stage mapping."
   },
   "local_toolchain": {
     "python": "3.11.9",
     "icarus_verilog": "12.0 devel / 2693dd32b",
     "verilator": "5.048",
-    "anlogic_td": "6.2.168.116"
+    "anlogic_td": "6.2.168.116",
+    "yosys": "0.70 (yowasp-yosys WASM)",
+    "nextpnr_ice40": "0.11.1 (yowasp-nextpnr-ice40 WASM)",
+    "icepack": "yowasp-icepack WASM"
   },
   "existing_evidence": {
     "rv32i_programs_per_core": 114,
@@ -47,9 +75,14 @@
   "open_items": [
     "CPU STA endpoint and IO constraint review",
     "RISC-V Architectural Certification Tests and Spike integration",
-    "formal equivalence and bounded/unbounded formal evidence",
-    "CDC/RDC and post-route simulation",
-    "RTL functional coverage closure",
+    "per-project formal/LEC application to CPU and video designs (generic gates implemented; see docs/formal.md)",
+    "per-project vendor-neutral synthesis application to CPU and video designs (generic gate implemented; see docs/synth.md)",
+    "SystemVerilog tool boundaries: no Icarus support for interface/package ports or classes, no Yosys support for import pkg::*, no portable concurrent assertions (see docs/systemverilog.md)",
+    "class-based verification maturity: minimal self-authored environment only, no UVM library (see docs/svsim.md)",
+    "CDC/RDC formal proof and netlist-level analysis (source-level structural heuristic via icforge cdc is available; it does not prove CDC safety, see docs/cdc.md)",
+    "RTL assertion coverage closure (structural line/branch/toggle via icforge coverage and cover-property functional points via --functional-coverage are available; assertion/how-many-fired coverage is not, see docs/coverage.md)",
+    "post-route SDF timing simulation (icforge timing summarizes static timing signoff and scaffolds the post-route path, but icesim is unavailable so post_route_status is blocked, see docs/timing.md)",
+    "ASIC physical signoff (DV-004 remains not_run; the open-backend timing signoff is not chip signoff)",
     "HX1P35A official schematic and revision pin audit",
     "RGB(0,0,0) HDMI receiver lock root cause",
     "Anlogic TD full and physical board acceptance remain local hardware gates"

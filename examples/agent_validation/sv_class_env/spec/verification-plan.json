@@ -1,0 +1,9 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears y to zero"},
+    {"id": "REQ-002", "description": "Add operation matches the reference model"},
+    {"id": "REQ-003", "description": "Subtract operation matches the reference model with wraparound"},
+    {"id": "REQ-004", "description": "Bitwise AND/OR operations match the reference model"},
+    {"id": "REQ-005", "description": "Randomized transactions match the class scoreboard model"}
+  ]
+}

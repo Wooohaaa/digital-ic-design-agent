@@ -1,0 +1,30 @@
+{
+  "project": "validation-functional-cov",
+  "agent_version": "0.6.0",
+  "top_module": "counter",
+  "testbench_top": "tb_counter",
+  "rtl_sources": [
+    "rtl/counter.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_counter.sv"
+  ],
+  "coverage": {
+    "functional_coverage": true
+  },
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_counter.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_counter.sv": "24796c1de886fdafadcdc575506239c2cefca382a437e1b66908931bb988f0d3"
+  },
+  "checks": [
+    "reset clears cnt",
+    "en counts cnt upward",
+    "cover property points for cnt=0,5,15 and en=1 are hit",
+    "assert property en |-> cnt != 15 holds"
+  ]
+}

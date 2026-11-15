@@ -34,19 +34,29 @@
 fpga-agent init <工程目录名>
 fpga-agent design <工程目录> --brief-file requirements.md --repair-rounds 2 --provider api --model gpt-6-luna
 fpga-agent verify <工程目录>
+fpga-agent lec <工程目录>
+fpga-agent formal <工程目录> --mode prove
+fpga-agent synth <工程目录>
+fpga-agent implement <工程目录> --target lattice-ice40-hx1k
+fpga-agent targets
+fpga-agent coverage <工程目录>
+fpga-agent coverage <工程目录> --functional-coverage
+fpga-agent cdc <工程目录>
+fpga-agent timing <工程目录>
 fpga-agent td <工程目录> --stage synth
 fpga-agent td <工程目录> --stage full
+fpga-agent release <工程目录> --version 0.7.0
 fpga-agent package <工程目录>
 ```
 
-`design` 与 `verify` 都会落仿真报告。`td` 没有仿真通过的报告时会拒绝启动。模型生成的文本一律不作为 Tcl 或 shell 执行。
+`design` 与 `verify` 都会落仿真报告。`td` 没有仿真通过的报告时会拒绝启动。模型生成的文本一律不作为 Tcl 或 shell 执行。`lec`、`formal`、`synth` 由 Yosys 驱动，是可选的等价/属性/厂商中立综合证据门禁，`svsim` 与 `coverage` 由 Verilator `--binary` 驱动，分别是可选的 class 化（UVM 风格）验证环境门禁与可选 RTL 结构/功能覆盖门禁，细节见 [formal.md](formal.md)、[synth.md](synth.md)、[systemverilog.md](systemverilog.md)、[svsim.md](svsim.md) 与 [coverage.md](coverage.md)。`cdc` 对 RTL 做源码级时钟/复位域交叉**结构启发式**分析（不是 CDC 形式证明），见 [cdc.md](cdc.md)。`timing` 汇总布线后静态时序签核并尝试 post-route 仿真（当前环境无 `icesim`，如实记 `blocked`），见 [timing.md](timing.md)。`implement` 是厂商中立的多后端实现层，按 `project.json` 的 `target` 分派到 open iCE40、Anlogic TD 或通用综合后端，细节见 [backends.md](backends.md)；`targets` 列出内置目标 profile。`release` 聚合全部门禁并生成版本化交付 zip，见 [release.md](release.md)。`rtl/` 与 `tb/` 下的 `.v`、`.sv` 文件都会被收集、哈希并纳入证据；class 环境源由 manifest 的 `svsim` 块声明，实现目标由 manifest 的 `target` 块声明，覆盖计划由 manifest 的 `coverage` 块（顶层/源/cflags/functional_coverage）声明。默认 `coverage` 测的是 RTL **结构**覆盖，`--functional-coverage` 追加 `cover property` 功能点与并发断言检查；`DV-004` 仍保留 ASIC 物理签核为未关闭项。
 
 最新的配置/依赖指纹、逐项需求检查、严格 lint、分职责工程审查和交付校验见 [engineering-workflow.md](engineering-workflow.md)。普通模块自动修复现在冻结已接受的 testbench/验收目标。现有工程仍可运行自检仿真，但缺少需求追踪或独立验证的部分会在审查报告中保留为阻塞项。
 
 ## 后续可扩展的验证强度
 
 - 当前 RISC-V profile 已有 64 个固定随机种子、定向程序和独立参考模型；其它模块可复用该验证 profile 结构。
-- Verilator lint 与仿真、formal equivalence/LEC、CDC 分析。
+- 功能覆盖闭合（`icforge coverage --functional-coverage` 已提供 `cover property` 功能点与并发断言检查，见 [coverage.md](coverage.md)；断言**覆盖率**仍是未关闭项，`DV-004`）、更深的 CDC/RDC 形式证明（当前 `cdc` 是源码结构启发式，见 [cdc.md](cdc.md)）、与 TD post-route SDF 时序仿真（等价/属性检查见 [formal.md](formal.md)，厂商中立综合见 [synth.md](synth.md)，时序签核路径见 [timing.md](timing.md)）。
 - TD post-route SDF 时序仿真和板上串口/逻辑分析仪自动验收。
 - 对摄像头/DDR/HDMI 等板级 IP 项目读取并维护官方 TD 基线，限制 AI 只修改自有数据通路模块。
 

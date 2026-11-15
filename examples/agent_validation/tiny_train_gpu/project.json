@@ -1,0 +1,70 @@
+{
+  "project": "validation-tiny-train-gpu",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "tiny_train_gpu",
+  "testbench_top": "tb_tiny_train_gpu",
+  "rtl_sources": [
+    "rtl/tiny_train_gpu.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_tiny_train_gpu.sv"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "start": "input",
+    "raw": "input",
+    "a_wren": "input",
+    "a_addr": "input",
+    "a_wdata": "input",
+    "b_wren": "input",
+    "b_addr": "input",
+    "b_wdata": "input",
+    "c_rden": "input",
+    "c_addr": "input",
+    "c_rdata": "output",
+    "done": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "start",
+    "raw",
+    "a_wren",
+    "a_addr",
+    "a_wdata",
+    "b_wren",
+    "b_addr",
+    "b_wdata",
+    "c_rden",
+    "c_addr",
+    "c_rdata",
+    "done"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_tiny_train_gpu.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_tiny_train_gpu.sv": "0107ec0c3a1c4625fcf3fed4ad6dcc2bcb0efb70203983c647a4fbcdbbd505fa"
+  },
+  "checks": [
+    "reset clears counters, accumulator, running and done",
+    "idle until start, then begins from (0,0,0)",
+    "every C element matches the 32-bit wraparound GEMM with ReLU",
+    "done asserts after the N^3-cycle GEMM and persists",
+    "raw mode preserves negative sums (no ReLU)",
+    "second GEMM run with fresh matrices is correct",
+    "reset clears C memory and done"
+  ]
+}
+

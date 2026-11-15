@@ -196,21 +196,40 @@ def do_td(project: Path, stage: str, td_root: str | None, *, update_manifest: bo
     return code or 1
 
 
-def do_package(project: Path, simulation_only: bool = False) -> int:
+def do_package(project: Path, simulation_only: bool = False, *, version: str | None = None) -> int:
     manifest = load_manifest(project)
     sim_file = project / "reports" / "simulation.json"
     td_file = project / "reports" / "td.json"
+    implement_file = project / "reports" / "implement.json"
     sim_result=json.loads(sim_file.read_text(encoding='utf-8')) if sim_file.is_file() else {}
     valid,reason=simulation_valid(project,manifest,sim_result)
     if not valid:
         print(f'Package gate: {reason}',file=sys.stderr)
         return 2
-    td_result = json.loads(td_file.read_text(encoding='utf-8')) if td_file.is_file() and not simulation_only else {}
-    if not simulation_only:
+    # A vendor-neutral (non-Anlogic) target delivers through the open
+    # implementation layer; the Anlogic TD flow remains the default path.
+    from .targets import resolve_target
+    from .implement import implement_valid as neutral_valid
+    try:
+        profile = resolve_target(manifest)
+    except ValueError:
+        # A manifest whose target cannot be resolved as a profile keeps the
+        # legacy Anlogic TD delivery path rather than aborting packaging.
+        profile = None
+    vendor_neutral = bool(profile) and profile.get("backend") != "anlogic" and profile.get("capabilities", {}).get("bitstream")
+    if not simulation_only and not vendor_neutral:
+        td_result = json.loads(td_file.read_text(encoding='utf-8')) if td_file.is_file() else {}
         valid,reason=implementation_valid(project,manifest,td_result)
         if not valid:
             print(f'Package gate: {reason}',file=sys.stderr)
             return 2
+    elif not simulation_only:
+        implement_result = json.loads(implement_file.read_text(encoding='utf-8')) if implement_file.is_file() else {}
+        valid,reason=neutral_valid(project,manifest,implement_result)
+        if not valid:
+            print(f'Package gate: {reason}',file=sys.stderr)
+            return 2
+    td_result = json.loads(td_file.read_text(encoding='utf-8')) if td_file.is_file() and not simulation_only else {}
     selected_run = project / td_result["run_directory"] if td_result.get("run_directory") else None
     from .quality import review_project
     review = review_project(project,'simulation' if simulation_only else 'fpga')
@@ -225,7 +244,8 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             report_hashes[name]=sha(project/name)
     target = project / "deliverables"
     target.mkdir(exist_ok=True)
-    artifact = target / f"{manifest['project']}-{'simulation' if simulation_only else 'delivery'}.zip"
+    version_suffix = f"-{version}" if version else ""
+    artifact = target / f"{manifest['project']}-{'simulation' if simulation_only else 'delivery'}{version_suffix}.zip"
     pending = target / f'.{artifact.name}.{uuid.uuid4().hex}.pending'
 
     def portable_text(path: Path) -> str:
@@ -260,8 +280,19 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             if path.is_file():
                 archive.write(path, path.relative_to(project).as_posix())
         archive.write(project / "project.json", "project.json")
-        archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':build_inputs,'bitstreams':td_result.get('bitstream_hashes',{}),
+        neutral_bitstream = None
+        if vendor_neutral and not simulation_only:
+            impl = implement_result.get("bitstream") or {}
+            if impl.get("path"):
+                neutral_bitstream = {"path": impl["path"], "sha256": impl.get("sha256"),
+                                     "extension": impl.get("extension"),
+                                     "target": implement_result.get("target", {}).get("id"),
+                                     "backend": implement_result.get("backend")}
+        delivery_bitstreams = (neutral_bitstream or {}).get("sha256") and {neutral_bitstream["path"]: neutral_bitstream["sha256"]} or td_result.get('bitstream_hashes', {})
+        archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':build_inputs,'bitstreams':delivery_bitstreams,
+            'vendor_neutral_bitstream':neutral_bitstream,
             'engineering_signoff':review['engineering_signoff'],'required_open_items':review['required_open_items'],
+            'release_version': version,
             'hardware_report_sha256':report_hashes.get('reports/hardware-video.json')},indent=2))
         if hardware_required:
             programming=json.loads((project/'reports/programming.json').read_text(encoding='utf-8'))
@@ -283,6 +314,11 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
                 for path in selected_run.rglob(pattern):
                     if path.is_file():
                         archive.writestr(path.relative_to(project).as_posix(), portable_text(path))
+        if neutral_bitstream and neutral_bitstream.get("path"):
+            bitstream_path = (project / neutral_bitstream["path"]).resolve()
+            if project.resolve() not in bitstream_path.parents:
+                raise ValueError('Vendor-neutral bitstream escapes the project.')
+            archive.write(bitstream_path, bitstream_path.relative_to(project).as_posix())
         for name in hdl_input_hashes(project,manifest['rtl_sources']+manifest['testbench_sources'],allow_dynamic_memory=manifest.get('verification',{}).get('kind')=='riscv-retire'):
             if name not in archive.namelist():
                 archive.write(project/name,name)
@@ -309,9 +345,15 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
         if not valid:
             raise ValueError('Delivery simulation evidence rejected: '+reason)
         if not simulation_only:
-            valid,reason=implementation_valid(project,current_manifest,td_result)
-            if not valid:
-                raise ValueError('Delivery implementation evidence rejected: '+reason)
+            if vendor_neutral:
+                impl_result = json.loads(implement_file.read_text(encoding='utf-8')) if implement_file.is_file() else {}
+                valid,reason=neutral_valid(project,current_manifest,impl_result)
+                if not valid:
+                    raise ValueError('Delivery implementation evidence rejected: '+reason)
+            else:
+                valid,reason=implementation_valid(project,current_manifest,td_result)
+                if not valid:
+                    raise ValueError('Delivery implementation evidence rejected: '+reason)
         if hardware_required:
             from .video_hardware import evidence_valid
             hardware=json.loads((project/'reports/hardware-video.json').read_text(encoding='utf-8'))
@@ -326,6 +368,9 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             for name,expected in td_result.get('bitstream_hashes',{}).items():
                 if hashlib.sha256(archive.read(name)).hexdigest() != expected:
                     raise ValueError(f'Archived bitstream differs: {name}')
+            if neutral_bitstream and neutral_bitstream.get('path'):
+                if hashlib.sha256(archive.read(neutral_bitstream['path'])).hexdigest() != neutral_bitstream.get('sha256'):
+                    raise ValueError(f"Archived vendor-neutral bitstream differs: {neutral_bitstream['path']}")
             if hardware_required:
                 for name,expected in hardware['artifacts'].items():
                     if hashlib.sha256(archive.read(name)).hexdigest()!=expected:
@@ -368,6 +413,52 @@ def parser() -> argparse.ArgumentParser:
     mutation.add_argument("--timeout", type=int, default=30, help="每个变异的仿真超时秒数")
     mutation.add_argument("--total-timeout", type=int, default=1800, help="审计总时限秒数")
     mutation.add_argument("--seed", type=int, default=1, help="稳定的变异样本种子")
+    lec = commands.add_parser("lec", help="用 Yosys 证明 RTL 与门级网表（或两份 HDL 设计）逻辑等价")
+    lec.add_argument("project")
+    lec.add_argument("--mode", choices=("synth", "designs"), help="synth：RTL 对自身网表；designs：参考对实现")
+    lec.add_argument("--top", help="顶层模块名，默认取 manifest")
+    lec.add_argument("--gold", nargs="+", help="参考 HDL 源文件（designs 模式）")
+    lec.add_argument("--gate", nargs="+", help="待验证实现 HDL 源文件（designs 模式）")
+    lec.add_argument("--timeout", type=int, default=300, help="Yosys 超时秒数")
+    formal = commands.add_parser("formal", help="用 Yosys 有界（BMC）或时序归纳证明 RTL 断言属性")
+    formal.add_argument("project")
+    formal.add_argument("--top", help="顶层模块名，默认取 manifest")
+    formal.add_argument("--mode", choices=("bmc", "prove"), help="bmc：有界模型检测；prove：时序归纳")
+    formal.add_argument("--depth", type=int, help="BMC 深度（周期数），默认取 manifest")
+    formal.add_argument("--no-init-zero", dest="init_zero", action="store_false", default=None,
+                        help="不假设所有触发器上电归零（默认按 FPGA 约定假设归零）")
+    formal.add_argument("--timeout", type=int, default=300, help="Yosys 超时秒数")
+    synth = commands.add_parser("synth", help="用 Yosys 综合出厂商中立的门级网表与资源报告")
+    synth.add_argument("project")
+    synth.add_argument("--top", help="顶层模块名，默认取 manifest")
+    synth.add_argument("--no-flatten", dest="flatten", action="store_false", default=None,
+                       help="保留层次结构（默认展平为单一网表）")
+    synth.add_argument("--timeout", type=int, default=300, help="Yosys 超时秒数")
+    svsim = commands.add_parser("svsim", help="用 Verilator 运行最小 class 化（UVM 风格）验证环境")
+    svsim.add_argument("project")
+    svsim.add_argument("--top", help="环境顶层模块名，默认取 manifest 的 svsim.top")
+    svsim.add_argument("--timeout", type=int, default=300, help="Verilator 构建与运行超时秒数")
+    commands.add_parser("targets", help="列出内置实现目标 profile（厂商中立多后端）")
+    implement = commands.add_parser("implement", help="用所选目标后端把 RTL 实现到 bitstream（iCE40/Anlogic/通用）")
+    implement.add_argument("project")
+    implement.add_argument("--target", help="目标 profile id，默认取 manifest 的 target 或默认 profile")
+    implement.add_argument("--top", help="顶层模块名，默认取 manifest")
+    implement.add_argument("--stage", choices=("synth", "full"), help="实现阶段，默认 full（通用目标只用 synth）")
+    implement.add_argument("--timeout", type=int, help="后端超时秒数，默认按后端选择")
+    implement.add_argument("--td-root", help="Anlogic TD 安装目录（anlogic 后端）")
+    coverage = commands.add_parser("coverage", help="用 Verilator 测量 RTL 结构覆盖率（行/分支/翻转）")
+    coverage.add_argument("project")
+    coverage.add_argument("--top", help="RTL 顶层模块名，默认取 manifest 的 top_module")
+    coverage.add_argument("--testbench-top", help="testbench 顶层模块名，默认取 manifest 的 testbench_top")
+    coverage.add_argument("--timeout", type=int, default=300, help="Verilator 构建与运行超时秒数")
+    coverage.add_argument("--functional-coverage", action="store_true", default=None,
+                          help="同时收集并要求 `cover property` 功能覆盖点（COV-002）")
+    cdc = commands.add_parser("cdc", help="静态分析 RTL 的时钟/复位域交叉候选（CDC/RDC）")
+    cdc.add_argument("project")
+    cdc.add_argument("--timeout", type=int, default=60, help="分析超时秒数")
+    timing = commands.add_parser("timing", help="读取布线后时序签核并尝试 post-route 时序仿真")
+    timing.add_argument("project")
+    timing.add_argument("--timeout", type=int, default=600, help="post-route 仿真超时秒数")
     video = commands.add_parser('video-hardware',help='终端采集 HDMI，并用独立几何参考验证实板立方体旋转')
     video.add_argument('project')
     video.add_argument('--device',default='Hagibis')
@@ -390,6 +481,10 @@ def parser() -> argparse.ArgumentParser:
     package = commands.add_parser("package", help="生成带源码、验证报告和可用 bitstream 的交付 zip")
     package.add_argument("project")
     package.add_argument('--simulation-only',action='store_true')
+    release = commands.add_parser("release", help="聚合全部工程门禁并生成版本化交付")
+    release.add_argument("project")
+    release.add_argument("--version", help="发布版本号，默认取 release.json 或 0.6.0")
+    release.add_argument('--simulation-only', action='store_true')
     flow=commands.add_parser('flow',help='verify, TD full, and evidence-gated delivery')
     flow.add_argument('project')
     flow.add_argument('--hardware-video',action='store_true',help='TD 后下载到 SRAM、采集 HDMI 并验证旋转，再交付')
@@ -421,6 +516,13 @@ def parser() -> argparse.ArgumentParser:
     prune.add_argument('project')
     prune.add_argument('--keep',type=int,default=5,help='保留最近 N 次及报告引用的 run')
     prune.add_argument('--apply',action='store_true',help='执行删除；默认 dry-run')
+    training=commands.add_parser('training',help='RSI stage 6: train a tiny model on the host (SGD) and tie its forward pass to the tiny_train_gpu RTL math')
+    training.add_argument('project',nargs='?',default='.')
+    training.add_argument('--n',type=int,default=4,help='square model/GEMM dimension')
+    training.add_argument('--samples',type=int,default=8)
+    training.add_argument('--steps',type=int,default=200)
+    training.add_argument('--lr',type=float,default=0.5)
+    training.add_argument('--seed',type=int,default=1)
     from .autonomy import configure_parser
     configure_parser(commands)
     from .knowledge import configure_parser as knowledge_parser
@@ -529,6 +631,19 @@ def main(argv: list[str] | None = None) -> int:
             result=prune_td_runs(resolve_project(args.project),keep=args.keep,apply=args.apply)
             print(json.dumps(result,ensure_ascii=False,indent=2))
             return 0
+        if args.command=='training':
+            from .training import run_training
+            project=Path(args.project).resolve()
+            report=run_training(project,n=args.n,samples=args.samples,steps=args.steps,lr=args.lr,seed=args.seed)
+            print(json.dumps({key:report.get(key) for key in (
+                'status','seed','n','samples','steps','learning_rate','initial_loss','final_loss',
+                'loss_reduction_percent','forward_match_percent','forward_mean_magnitude_error',
+                'weight_sha256','reason')},ensure_ascii=False,indent=2))
+            return 0 if report['status']=='pass' else 1
+        if args.command == 'targets':
+            from .targets import BUILTIN_TARGETS
+            print(json.dumps({'targets': list(BUILTIN_TARGETS.values())}, ensure_ascii=False, indent=2))
+            return 0
         project = resolve_project(args.project)
         if args.command == 'lint':
             from .quality import lint_project
@@ -561,10 +676,109 @@ def main(argv: list[str] | None = None) -> int:
                 "reason", "note") if key in report}, ensure_ascii=False, indent=2))
             print(f"完整变异清单：{project / 'reports' / 'mutation.json'}")
             return 0 if report.get("status") == "complete" else 2
+        if args.command == 'lec':
+            from .formal import run_lec
+            progress = lambda message: print(message, flush=True)
+            report = run_lec(project, mode=args.mode, top=args.top, gold=args.gold,
+                             gate=args.gate, timeout=args.timeout, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "mode", "top", "proven", "unproven", "unproven_points",
+                "netlist", "tool_version", "elapsed_seconds", "reason") if key in report},
+                ensure_ascii=False, indent=2))
+            print(f"完整 LEC 报告：{project / 'reports' / 'lec.json'}")
+            return 0 if report.get("status") == "pass" else 1 if report.get("status") == "fail" else 2
+        if args.command == 'formal':
+            from .formal import run_formal
+            progress = lambda message: print(message, flush=True)
+            report = run_formal(project, top=args.top, depth=args.depth, mode=args.mode,
+                                set_init_zero=args.init_zero, timeout=args.timeout, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "mode", "bounded", "depth", "steps", "set_init_zero",
+                "assertions", "top", "tool_version", "elapsed_seconds", "reason") if key in report},
+                ensure_ascii=False, indent=2))
+            print(f"完整形式化报告：{project / 'reports' / 'formal.json'}")
+            return 0 if report.get("status") == "pass" else 1 if report.get("status") == "fail" else 2
+        if args.command == 'synth':
+            from .synth import run_synth
+            progress = lambda message: print(message, flush=True)
+            report = run_synth(project, top=args.top, flatten=args.flatten,
+                               timeout=args.timeout, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "top", "flatten", "cells", "flops", "netlist",
+                "tool_version", "elapsed_seconds", "reason") if key in report},
+                ensure_ascii=False, indent=2))
+            print(f"完整综合报告：{project / 'reports' / 'synth.json'}")
+            return 0 if report.get("status") == "pass" else 2
+        if args.command == 'svsim':
+            from .svsim import run_svsim
+            progress = lambda message: print(message, flush=True)
+            report = run_svsim(project, top=args.top, timeout=args.timeout, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "top", "tool_version", "cxx", "make", "checks",
+                "elapsed_seconds", "reason") if key in report}, ensure_ascii=False, indent=2))
+            print(f"完整 class 环境报告：{project / 'reports' / 'svsim.json'}")
+            return 0 if report.get("status") == "pass" else 2
+        if args.command == 'implement':
+            from .implement import run_implement
+            progress = lambda message: print(message, flush=True)
+            report = run_implement(project, target=args.target, top=args.top, stage=args.stage,
+                                   timeout=args.timeout, td_root=args.td_root, progress=progress)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "backend", "stage", "target", "capabilities", "top",
+                "stages", "utilization", "timing", "bitstream", "elapsed_seconds", "reason")
+                if key in report}, ensure_ascii=False, indent=2))
+            print(f"完整实现报告：{project / 'reports' / 'implement.json'}")
+            return 0 if report.get("status") == "pass" else 2
+        if args.command == 'coverage':
+            from .coverage import run_coverage
+            progress = lambda message: print(message, flush=True)
+            report = run_coverage(project, top=args.top, testbench_top=args.testbench_top,
+                                  timeout=args.timeout, progress=progress,
+                                  functional_coverage=args.functional_coverage)
+            summary = report.get("coverage") or {}
+            functional = report.get("functional") or {}
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "structural_status", "functional_status",
+                "top", "testbench_top", "tool_version", "cxx",
+                "returncode", "elapsed_seconds", "assertion_failure", "reason")
+                if key in report}, ensure_ascii=False, indent=2))
+            print(json.dumps({
+                "structural_coverage_percent": summary.get("coverage_percent"),
+                "structural_points": summary.get("total_points"),
+                "functional_coverage_percent": functional.get("coverage_percent"),
+                "functional_points": functional.get("total_points"),
+            }, ensure_ascii=False))
+            print(f"完整覆盖率报告：{project / 'reports' / 'coverage.json'}")
+            return 0 if report.get("status") == "pass" else 2
+        if args.command == 'cdc':
+            from .cdc import run_cdc
+            report = run_cdc(project, timeout=args.timeout)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "clocks", "crossings", "reset_domains", "reason")
+                if key in report}, ensure_ascii=False, indent=2))
+            print(f"完整 CDC 报告：{project / 'reports' / 'cdc.json'}")
+            return 0 if report.get("status") == "pass" else 2
+        if args.command == "timing":
+            from .timing import run_timing
+            report = run_timing(project, timeout=args.timeout)
+            print(json.dumps({key: report.get(key) for key in (
+                "project", "status", "timing_status", "post_route_status", "timing", "reason")
+                if key in report}, ensure_ascii=False, indent=2))
+            print(f"完整时序报告：{project / 'reports' / 'timing.json'}")
+            return 0 if report.get("status") == "pass" else 2
         if args.command == "td":
             return do_td(project, args.stage, args.td_root)
         if args.command == "package":
             return do_package(project,args.simulation_only)
+        if args.command == "release":
+            from .release import run_release
+            release = run_release(project, version=args.version)
+            print(json.dumps({"project": release.get("project"),
+                              "version": release.get("version"),
+                              "aggregate": release.get("aggregate"),
+                              "reason": release.get("reason")}, ensure_ascii=False, indent=2))
+            code = do_package(project, args.simulation_only, version=release.get("version"))
+            return code
         if args.command=='flow':
             result=verify_project(project)
             if result.status!='pass':return 1

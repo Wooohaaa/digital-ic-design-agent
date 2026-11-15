@@ -1,0 +1,8 @@
+{
+  "requirements": [
+    { "id": "REQ-001", "description": "Color source generates the eight expected RGB bars and blanks to black." },
+    { "id": "REQ-002", "description": "640x480 raster, sync pulse windows, and frame boundary match the verified timing contract." },
+    { "id": "REQ-003", "description": "Top-level PLL startup enables HDMI and the serializer presents complementary differential outputs." },
+    { "id": "REQ-004", "description": "Board debug LEDs assert power-on completion and PLL lock." }
+  ]
+}

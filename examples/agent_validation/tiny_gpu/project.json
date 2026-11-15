@@ -1,0 +1,64 @@
+{
+  "project": "validation-tiny-gpu",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "tiny_gpu",
+  "testbench_top": "tb_tiny_gpu",
+  "rtl_sources": [
+    "rtl/tiny_gpu.sv"
+  ],
+  "testbench_sources": [
+    "tb/tb_tiny_gpu.sv"
+  ],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "start": "input",
+    "imem_wren": "input",
+    "imem_addr": "input",
+    "imem_wdata": "input",
+    "dmem_wren": "input",
+    "dmem_addr": "input",
+    "dmem_wdata": "input",
+    "dmem_rden": "input",
+    "dmem_rdata": "output",
+    "done": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "start",
+    "imem_wren",
+    "imem_addr",
+    "imem_wdata",
+    "dmem_wren",
+    "dmem_addr",
+    "dmem_wdata",
+    "dmem_rden",
+    "dmem_rdata",
+    "done"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_tiny_gpu.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_tiny_gpu.sv": "56b4ef8553504bc01bc22404d09d0a0071e913b9e9d6483a73e642a9e2a54816"
+  },
+  "checks": [
+    "reset clears PC and idle-until-start",
+    "per-lane dot-product MAC vs reference model (incl. 32-bit wraparound)",
+    "per-lane result store and lane isolation",
+    "done asserts once after EXIT and the core halts",
+    "MOVI/MOV/ADD/SUB/MUL/SETPLT directed microtest",
+    "BRA skip target"
+  ]
+}

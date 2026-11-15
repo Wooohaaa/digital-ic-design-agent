@@ -1,0 +1,21 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears done and idles the UART line high"},
+    {"id": "REQ-002", "description": "The GEMM engine stays idle until CTRL start is pulsed"},
+    {"id": "REQ-003", "description": "Every C element read back through the bus equals the 32-bit wraparound GEMM of A and B with sign-bit ReLU"},
+    {"id": "REQ-004", "description": "done asserts after the N^3-cycle GEMM and stays asserted while halted"},
+    {"id": "REQ-005", "description": "UART transmits the written byte as a correct 8N1 frame (start, 8 data bits LSB-first, stop)"},
+    {"id": "REQ-006", "description": "A second GEMM run with fresh operand matrices produces correct results"},
+    {"id": "REQ-007", "description": "Reset after a completed run clears the result register and done"},
+    {"id": "REQ-008", "description": "The RV32I CPU drives the bus: fills A/B with 1s, starts the GEMM, polls STATUS, reads C[0]=4 into RESULT, sends UART 0x55, waits for the UART, and halts"},
+    {"id": "REQ-009", "description": "A negative-sum GEMM clamps the ReLU result to 0 (sign-bit clamp path)"},
+    {"id": "REQ-010", "description": "The DMA engine (second bus master) does a linear A->B copy with default strides; destination words equal the diverse source data; busy/done status reported"},
+    {"id": "REQ-011", "description": "The DMA engine copies across the remaining windows (C->A, B->C) and reports busy/done"},
+    {"id": "REQ-012", "description": "The DMA engine does a 2D scatter/gather copy (source row stride 2 gathers rows with a gap, destination stride 4 is contiguous); every destination word equals the source word at the gathered offset"},
+    {"id": "REQ-013", "description": "The DMA interrupt (dma_irq pin and status[2]) asserts on copy done, clears on the next start, and re-asserts on the next done"},
+    {"id": "REQ-014", "description": "The DMA engine walks a descriptor chain (descriptor 0 gathers A->B with source row stride 2; descriptor 1 copies B->C linearly and is marked last): B equals the gathered source words, C equals B, busy is observed during the chain, and the interrupt asserts once at the end of the whole chain"},
+    {"id": "REQ-015", "description": "The AXI-like handshaking bus declares operand-SRAM write-ready when the GEMM is idle and drops ready while the GEMM runs: a host write to A[0] driven during the run is dropped by the fabric (A[0] keeps its value), a register write (RESULT) is accepted regardless because it does not contend for the operand SRAM, and the host write task waits for ready before committing"},
+    {"id": "REQ-016", "description": "The direct-mapped instruction cache refills a missing line from IMEM and serves hits combinationally: a cold probe (flush + probe of a programmed line) asserts the refill/stall and then returns the cached word, a hot probe of the same index is a clean hit with no refill, and the cache tags distinguish different 16-word blocks that map to the same line"},
+    {"id": "REQ-017", "description": "The direct-mapped data cache is non-blocking: a cold probe of a programmed A line misses (status valid=0) and bypasses to the SRAM word in the same cycle, an explicit fill makes the same line hit and return the cached word, every offset of the line hits, a host write to the same word clears the line so the next probe misses and bypasses to the new value, B/C tags distinguish windows mapping to the same line index, and starting the GEMM clears the whole cache"}
+  ]
+}

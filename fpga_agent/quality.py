@@ -9,7 +9,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .evidence import hdl_input_hashes, implementation_valid, sha, simulation_input_hashes, simulation_valid, trusted_testbench_valid
+from .formal import formal_valid, lec_valid
+from .implement import implement_valid
 from .project import load_manifest
+from .svsim import svsim_valid
+from .synth import synth_valid
+from .coverage import coverage_valid, functional_coverage_valid
+from .cdc import cdc_valid
+from .timing import timing_valid
 
 
 def read_report(path: Path) -> dict:
@@ -174,7 +181,28 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         '' if valid_lint else 'Install Verilator if unavailable, run /lint, and fix warnings.',['reports/lint.json'])
     add('RTL-002','design','review_required',
         'Clock/reset-domain crossings, reset release and timing exceptions require engineering review.',
-        'Review clock/reset domains and exceptions; run CDC/RDC analysis for crossings.',['spec/design.md'])
+        'Review clock/reset domains and exceptions; run `icforge cdc PROJECT` for structural crossing candidates.',['spec/design.md'])
+    cdc = read_report(project / 'reports/cdc.json')
+    try:
+        cdc_ok, cdc_reason = cdc_valid(project, manifest, cdc)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        cdc_ok, cdc_reason = False, str(exc)
+    cdc_status = cdc.get('status')
+    if cdc_ok:
+        add('CDC-001','design','pass',cdc_reason,'',['reports/cdc.json'],required=False)
+    elif cdc_status == 'review_required':
+        add('CDC-001','design','review_required',cdc_reason,
+            'Review the reported clock/reset domain crossing candidates; add synchronizers or document the transfer.',
+            ['reports/cdc.json'],required=False)
+    elif cdc_status in (None, 'missing', 'invalid'):
+        add('CDC-001','design','not_run',
+            'No clock/reset domain crossing analysis is recorded.',
+            'Run `icforge cdc PROJECT` to scan the RTL for clock/reset domain crossing candidates.',
+            ['reports/cdc.json'],required=False)
+    else:
+        add('CDC-001','design','blocked',cdc_reason,
+            'Rerun `icforge cdc PROJECT` on current inputs; inspect reports/cdc.log.',
+            ['reports/cdc.json'],required=False)
     valid_td = False
     if scope == 'fpga':
         try:
@@ -190,9 +218,148 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         board = read_report(project / 'board/hx1p35a.json')
         add('BOARD-001','integration','review_required',str(board.get('confidence','Board revision and schematic confirmation not recorded.')),
             'Confirm device, board revision, pinout, oscillator and IO voltages against the actual schematic.',['board/hx1p35a.json'])
+    synth = read_report(project / 'reports/synth.json')
+    try:
+        synth_ok, synth_reason = synth_valid(project, manifest, synth)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        synth_ok, synth_reason = False, str(exc)
+    if synth_ok:
+        add('SYNTH-001','implementation','pass',synth_reason,'',['reports/synth.json'],required=False)
+    elif synth.get('status') in (None, 'missing', 'invalid'):
+        add('SYNTH-001','implementation','not_run',
+            'No vendor-neutral synthesis evidence; the RTL has not been shown to synthesize to a gate netlist.',
+            'Run `icforge synth PROJECT` to lower the RTL to a technology-independent netlist.',
+            ['reports/synth.json'],required=False)
+    elif synth.get('status') == 'blocked':
+        add('SYNTH-001','implementation','blocked',synth_reason,
+            'Install Yosys (or the formal extra) and rerun `icforge synth PROJECT`.',
+            ['reports/synth.json'],required=False)
+    else:
+        add('SYNTH-001','implementation','blocked',
+            f"Generic synthesis is not established: {synth_reason}.",
+            'Rerun `icforge synth PROJECT` on current inputs and fix any synthesis errors.',
+            ['reports/synth.json'],required=False)
+    implement = read_report(project / 'reports/implement.json')
+    try:
+        impl_ok, impl_reason = implement_valid(project, manifest, implement)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        impl_ok, impl_reason = False, str(exc)
+    impl_status = implement.get('status')
+    if impl_ok:
+        add('IMPL-003','implementation','pass',impl_reason,'',['reports/implement.json'],required=False)
+    elif impl_status in (None, 'missing', 'invalid'):
+        add('IMPL-003','implementation','not_run',
+            'No vendor-neutral implementation evidence; no target backend has been run.',
+            'Run `icforge implement PROJECT --target TARGET` to place, route and pack the design.',
+            ['reports/implement.json'],required=False)
+    elif impl_status == 'blocked':
+        add('IMPL-003','implementation','blocked',impl_reason,
+            'Install the target toolchain (openfpga extra or Anlogic TD) and rerun `icforge implement PROJECT`.',
+            ['reports/implement.json'],required=False)
+    else:
+        add('IMPL-003','implementation','blocked',
+            f"Implementation is not established: {impl_reason}.",
+            'Inspect reports/implement.log and rerun `icforge implement PROJECT --target TARGET` on current inputs.',
+            ['reports/implement.json'],required=False)
+    # Vendor-neutral delivery: a non-Anlogic target with bitstream capability
+    # satisfies the fpga delivery gate through the open implementation layer
+    # instead of the Anlogic TD flow. The generic (synthesis-only) target never
+    # claims delivery because it has no bitstream.
+    neutral_deliverable = False
+    try:
+        from .targets import resolve_target
+        _profile = resolve_target(manifest)
+        neutral_ok, _neutral_reason = implement_valid(project, manifest, implement)
+        neutral_deliverable = bool(neutral_ok and _profile.get("capabilities", {}).get("bitstream"))
+    except (OSError, ValueError, TypeError, KeyError):
+        neutral_deliverable = False
+    add('DELIV-001','integration',
+        'pass' if neutral_deliverable else 'not_run',
+        ('Vendor-neutral bitstream delivery evidence is current for the selected target.'
+         if neutral_deliverable
+         else 'No vendor-neutral delivery evidence; the Anlogic TD flow remains the delivery path.'),
+        ('' if neutral_deliverable
+         else 'Run `icforge implement PROJECT` on a bitstream-capable target to enable vendor-neutral delivery.'),
+        ['reports/implement.json'], required=False)
+    coverage = read_report(project / 'reports/coverage.json')
+    try:
+        coverage_ok, coverage_reason = coverage_valid(project, manifest, coverage)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        coverage_ok, coverage_reason = False, str(exc)
+    coverage_status = coverage.get('status')
+    if coverage_ok:
+        add('COV-001','verification','pass',coverage_reason,'',['reports/coverage.json'],required=False)
+    elif coverage_status in (None, 'missing', 'invalid'):
+        add('COV-001','verification','not_run',
+            'No RTL structural coverage evidence is recorded.',
+            'Run `icforge coverage PROJECT` to measure line/branch/toggle coverage of the RTL.',
+            ['reports/coverage.json'],required=False)
+    elif coverage_status == 'blocked':
+        add('COV-001','verification','blocked',coverage_reason,
+            'Extend the testbench to exercise the uncovered points, then rerun `icforge coverage PROJECT`.',
+            ['reports/coverage.json'],required=False)
+    else:
+        add('COV-001','verification','blocked',
+            f"RTL structural coverage is not established: {coverage_reason}.",
+            'Inspect reports/coverage.log and rerun `icforge coverage PROJECT` on current inputs.',
+            ['reports/coverage.json'],required=False)
+    # COV-002: functional (cover property) coverage, optional and separate from COV-001.
+    try:
+        functional_ok, functional_reason = functional_coverage_valid(project, manifest, coverage)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        functional_ok, functional_reason = False, str(exc)
+    if functional_ok:
+        add('COV-002','verification','pass',functional_reason,'',
+            ['reports/coverage.json'],required=False)
+    elif coverage.get('functional') in (None, {}):
+        if coverage.get('functional_requested'):
+            add('COV-002','verification','blocked',functional_reason,
+                'Run `icforge coverage PROJECT --functional-coverage` and add `cover property` '
+                'points, then rerun.',
+                ['reports/coverage.json'],required=False)
+        else:
+            add('COV-002','verification','not_run',
+                'No functional (cover property) coverage evidence is recorded.',
+                'Run `icforge coverage PROJECT --functional-coverage` with `cover property` '
+                'points in the RTL.',
+                ['reports/coverage.json'],required=False)
+    elif coverage.get('status') == 'fail' and coverage.get('assertion_failure'):
+        add('COV-002','verification','blocked',
+            f"Functional coverage not established: {functional_reason}.",
+            'A concurrent assertion failed; inspect reports/coverage.log.',
+            ['reports/coverage.json'],required=False)
+    else:
+        add('COV-002','verification','blocked',functional_reason,
+            'Extend the testbench to hit the uncovered cover property points, then rerun '
+            '`icforge coverage PROJECT --functional-coverage`.',
+            ['reports/coverage.json'],required=False)
     add('DV-004','verification','not_run',
-        'Code/toggle coverage, formal properties/equivalence and post-route simulation are not evidenced by this flow.',
+        'Post-route simulation and ASIC physical signoff are not evidenced by this flow; '
+        'line/branch/toggle structural coverage (COV-001) and functional cover-property '
+        'coverage (COV-002) are tracked separately.',
         'Select required analyses in the verification plan and collect tool-produced evidence.',required=False)
+    timing = read_report(project / 'reports/timing.json')
+    try:
+        timing_ok, timing_reason = timing_valid(project, manifest, timing)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        timing_ok, timing_reason = False, str(exc)
+    timing_status = timing.get('status')
+    if timing_ok:
+        add('TIM-001','implementation','pass',timing_reason,'',['reports/timing.json'],required=False)
+    elif timing_status in (None, 'missing', 'invalid'):
+        add('TIM-001','implementation','not_run',
+            'No post-route timing/signoff evidence is recorded.',
+            'Run `icforge implement PROJECT` then `icforge timing PROJECT`.',
+            ['reports/timing.json'],required=False)
+    elif timing_status == 'fail':
+        add('TIM-001','implementation','blocked',timing_reason,
+            'Fix the timing violation (or the constraint) and rerun the implementation and timing steps.',
+            ['reports/timing.json'],required=False)
+    else:
+        add('TIM-001','implementation','blocked',timing_reason,
+            'Post-route simulation needs a target simulator (icesim for iCE40); '
+            'install it or set ICFORGE_ICESIM, then rerun `icforge timing PROJECT`.',
+            ['reports/timing.json'],required=False)
     mutation = read_report(project / 'reports/mutation.json')
     try:
         mutation_current = (mutation.get('status') == 'complete'
@@ -227,6 +394,81 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         mutation_action = 'Resolve the audit blocker or rerun `icforge mutation-audit PROJECT` on current inputs.'
     add('DV-005','verification',mutation_status,mutation_detail,mutation_action,
         ['reports/mutation.json'],required=False)
+    lec = read_report(project / 'reports/lec.json')
+    try:
+        lec_ok, lec_reason = lec_valid(project, manifest, lec)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        lec_ok, lec_reason = False, str(exc)
+    if lec_ok:
+        add('DV-006','verification','pass',lec_reason,'',['reports/lec.json'],required=False)
+    elif lec.get('status') in (None, 'missing', 'invalid'):
+        add('DV-006','verification','not_run',
+            'No current logic-equivalence evidence; RTL-versus-netlist equivalence is unproven.',
+            'Run `icforge lec PROJECT` to prove the RTL equals its technology-independent netlist.',
+            ['reports/lec.json'],required=False)
+    elif lec.get('status') == 'blocked':
+        add('DV-006','verification','blocked',lec_reason,
+            'Install Yosys (or the formal extra) and rerun `icforge lec PROJECT`.',
+            ['reports/lec.json'],required=False)
+    else:
+        add('DV-006','verification','blocked',
+            f"Logic equivalence is not established: {lec_reason}.",
+            'Inspect reports/lec.log unproven $equiv cells, fix the divergence and rerun `icforge lec PROJECT`.',
+            ['reports/lec.json'],required=False)
+    formal = read_report(project / 'reports/formal.json')
+    try:
+        formal_ok, formal_reason = formal_valid(project, manifest, formal)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        formal_ok, formal_reason = False, str(exc)
+    formal_status = formal.get('status')
+    if formal_ok:
+        add('DV-007','verification','pass',formal_reason,'',['reports/formal.json'],required=False)
+    elif formal_status == 'not_applicable':
+        add('DV-007','verification','not_run',
+            'The RTL declares no assertions or covers, so no formal property could be checked.',
+            'Add specification-backed immediate/concurrent assertions and rerun `icforge formal PROJECT`.',
+            ['reports/formal.json'],required=False)
+    elif formal_status == 'fail':
+        add('DV-007','verification','blocked',
+            'A counterexample falsifies a declared property.',
+            'Inspect reports/formal.log; fix the RTL or the property, then rerun `icforge formal PROJECT`.',
+            ['reports/formal.json'],required=False)
+    elif formal_status in (None, 'missing', 'invalid'):
+        add('DV-007','verification','not_run',
+            'No current formal property evidence is recorded.',
+            'Run `icforge formal PROJECT` to check declared assertions (bounded BMC or temporal induction).',
+            ['reports/formal.json'],required=False)
+    elif formal_status == 'blocked':
+        add('DV-007','verification','blocked',formal_reason,
+            'Install Yosys (or the formal extra) and rerun `icforge formal PROJECT`.',
+            ['reports/formal.json'],required=False)
+    else:
+        add('DV-007','verification','blocked',
+            f"Formal property evidence is not established: {formal_reason}.",
+            'Rerun `icforge formal PROJECT` on current inputs.',
+            ['reports/formal.json'],required=False)
+    svsim = read_report(project / 'reports/svsim.json')
+    try:
+        svsim_ok, svsim_reason = svsim_valid(project, manifest, svsim)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        svsim_ok, svsim_reason = False, str(exc)
+    svsim_status = svsim.get('status')
+    if svsim_ok:
+        add('DV-008','verification','pass',svsim_reason,'',['reports/svsim.json'],required=False)
+    elif svsim_status in (None, 'missing', 'invalid'):
+        add('DV-008','verification','not_run',
+            'No class-based (UVM-style) environment evidence is recorded.',
+            'Run `icforge svsim PROJECT` to elaborate and execute the class environment with Verilator.',
+            ['reports/svsim.json'],required=False)
+    elif svsim_status == 'blocked':
+        add('DV-008','verification','blocked',svsim_reason,
+            'Install Verilator with a C++ compiler and make, then rerun `icforge svsim PROJECT`.',
+            ['reports/svsim.json'],required=False)
+    else:
+        add('DV-008','verification','blocked',
+            f"Class-environment evidence is not established: {svsim_reason}.",
+            'Inspect reports/svsim.log; fix the environment or RTL and rerun `icforge svsim PROJECT`.',
+            ['reports/svsim.json'],required=False)
     hardware_ok=False
     hardware_detail='Physical board programming and measurement have not been performed.'
     if tinyllm:
@@ -239,7 +481,7 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
     add('HW-001','integration','pass' if hardware_ok else 'blocked' if hardware_required else 'not_run',hardware_detail,
         '' if hardware_ok else 'Program the board and record observed outputs against the hardware acceptance procedure.',
         ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else ['reports/hardware-video.json'] if hdmi else [],required=hardware_required)
-    artifact_ready = valid_sim and (scope == 'simulation' or valid_td) and (not hardware_required or hardware_ok)
+    artifact_ready = valid_sim and (scope == 'simulation' or valid_td or neutral_deliverable) and (not hardware_required or hardware_ok)
     profile = ('trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else
                'trusted-hdmi-cube' if hdmi else 'trusted-hdl-testbench' if trusted_hdl else 'generated-self-check')
     report = {'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(),

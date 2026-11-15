@@ -1,0 +1,48 @@
+{
+  "project": "validation-ice40-pwm",
+  "agent_version": "0.6.0",
+  "target": "lattice-ice40-hx1k",
+  "top_module": "pwm_breath",
+  "testbench_top": "tb_pwm_breath",
+  "rtl_sources": [
+    "rtl/pwm_breath.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_pwm_breath.v"
+  ],
+  "board_constraints": "constraints/pins.pcf",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "duty": "input",
+    "pwm": "output",
+    "level": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "duty",
+    "pwm",
+    "level"
+  ],
+  "td_full_allowed": false,
+  "implement": {
+    "pins": "constraints/pins.pcf",
+    "stage": "full"
+  },
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_pwm_breath.v"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_pwm_breath.v": "c5dfe21d6d4bfea41a30c79e202cc702be25a6bf6fc636fe56b9c33e8eb64008"
+  },
+  "checks": [
+    "reset clears pwm and level",
+    "duty maps to high-cycle count",
+    "level tracks counter[7:4]"
+  ]
+}

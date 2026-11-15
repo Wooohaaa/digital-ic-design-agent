@@ -1,0 +1,13 @@
+{
+  "board": "HX1P35A",
+  "device": "PH1P35MDG324",
+  "device_family": "ph1",
+  "nominal_system_clock_hz": 50000000,
+  "signals": {
+    "I_sys_clk": {"pin": "C4", "direction": "input", "io_standard": "LVCMOS33", "pull": "PULLUP", "meaning": "50 MHz system clock"},
+    "I_rst_n": {"pin": "R10", "direction": "input", "io_standard": "LVCMOS33", "pull": "PULLUP", "active_low": true, "meaning": "board reset"},
+    "O_screen_pwm": {"pin": "R11", "direction": "output", "io_standard": "LVCMOS33", "drive_strength": 8, "pull": "PULLDOWN", "meaning": "screen/backlight PWM; used as the heartbeat observation point"}
+  },
+  "source": "https://github.com/Aurora-520/anlogic-ph1p35-vision/blob/main/user_source/constraints_source/pin.adc",
+  "confidence": "community project pin assignments; verify against the exact board revision and official schematic before programming"
+}

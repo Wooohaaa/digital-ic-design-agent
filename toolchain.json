@@ -14,13 +14,42 @@
     "verilator": {
       "minimum": "5.0",
       "tested_local": "5.048",
-      "local_distribution": "MSYS2 UCRT64"
+      "local_distribution": "MSYS2 UCRT64",
+      "used_by": ["lint", "svsim", "coverage"],
+      "svsim_requires": "a C++ compiler and make (Verilator --binary); reports blocked when absent",
+      "coverage_requires": "a C++ compiler and make (Verilator --binary --coverage); reports blocked when absent; structural line/branch/toggle/expr coverage plus, with --functional-coverage, cover property (user) points and concurrent-assertion checking; not assertion or specification coverage"
+    },
+    "icesim": {
+      "used_by": ["timing"],
+      "capabilities": "ice40 post-route / gate-level (SDF) simulation",
+      "local_distribution": "native icesim on PATH, or ICFORGE_ICESIM",
+      "ci": false,
+      "current_status": "not installed locally; `icforge timing` reports post_route_status=blocked (see docs/timing.md)"
     },
     "anlogic_td": {
       "tested_local": "6.2.168.116",
       "platform": "Windows only",
       "ci": false
+    },
+    "yosys": {
+      "minimum": "0.70",
+      "tested_local": "0.70 (yowasp-yosys, WASM)",
+      "local_distribution": "portable `yowasp-yosys` pip entry point, native yosys on PATH, or ICFORGE_YOSYS",
+      "used_by": ["lec", "formal", "synth", "implement"]
+    },
+    "ice40": {
+      "family": "ice40",
+      "tested_local": "nextpnr-0.11.1 via yowasp-nextpnr-ice40 (WASM), icepack",
+      "local_distribution": "portable YosysHQ yowasp entry points, native executables on PATH, or ICFORGE_NEXTPNR/ICFORGE_ICEPACK",
+      "capabilities": "synthesis, place_route, bitstream (open, license-free)",
+      "used_by": ["implement"],
+      "requires": "yowasp-yosys (synth_ice40), yowasp-nextpnr-ice40, yowasp-icepack; `.[openfpga]` extra"
     }
   },
-  "board": "HX1P35A / PH1P35MDG324"
+  "board": "HX1P35A / PH1P35MDG324",
+  "targets": {
+    "anlogic-hx1p35a": "vendor backend (Anlogic TD)",
+    "lattice-ice40-hx1k": "open backend (Yosys + nextpnr-ice40 + icepack)",
+    "generic": "vendor-neutral synthesis only"
+  }
 }

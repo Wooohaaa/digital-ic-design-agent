@@ -1,0 +1,11 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears the loop counters, accumulator, running and done"},
+    {"id": "REQ-002", "description": "The engine stays idle until start is pulsed, then begins from (0,0,0)"},
+    {"id": "REQ-003", "description": "Every C element equals the 32-bit wraparound GEMM of A and B with ReLU applied"},
+    {"id": "REQ-004", "description": "done asserts after the N^3-cycle GEMM and stays asserted while halted"},
+    {"id": "REQ-005", "description": "raw mode stores the wrapped sum without applying ReLU (negative results preserved)"},
+    {"id": "REQ-006", "description": "A second GEMM run with fresh matrices produces correct ReLU results"},
+    {"id": "REQ-007", "description": "Reset after a completed run clears the C memory and done"}
+  ]
+}

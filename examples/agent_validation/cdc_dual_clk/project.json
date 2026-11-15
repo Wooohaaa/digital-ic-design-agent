@@ -1,0 +1,5 @@
+{
+  "project": "cdc-dual-clk",
+  "top_module": "dual_clk",
+  "rtl_sources": ["rtl/dual_clk.v"]
+}

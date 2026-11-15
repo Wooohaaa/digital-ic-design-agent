@@ -1,0 +1,9 @@
+{
+  "requirements": [
+    {"id": "REQ-001", "description": "Synchronous reset clears the FSM, beat struct, accumulator, sum and shift register"},
+    {"id": "REQ-002", "description": "A loaded beat accumulates DEPTH times so sum equals DEPTH times the beat"},
+    {"id": "REQ-003", "description": "busy asserts only while running and deasserts at idle/done"},
+    {"id": "REQ-004", "description": "The generate-built shift register delays din by DEPTH stages"},
+    {"id": "REQ-005", "description": "Directed and deterministic random runs match the reference sum model"}
+  ]
+}

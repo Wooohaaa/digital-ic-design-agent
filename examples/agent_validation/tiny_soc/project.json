@@ -1,0 +1,186 @@
+{
+  "project": "validation-tiny-soc",
+  "agent_version": "0.6.0",
+  "board": "HX1P35A",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "top_module": "tiny_soc",
+  "testbench_top": "tb_tiny_soc",
+  "rtl_sources": [
+    "rtl/tiny_soc.sv",
+    "rtl/tiny_soc_core.sv",
+    "rtl/tiny_dma.sv",
+    "rtl/rv32_core.v"
+  ],
+  "testbench_sources": [
+    "tb/tb_tiny_soc.sv"
+  ],
+  "coverage": {
+    "sources": [
+      "rtl/tiny_soc_core.sv",
+      "rtl/tiny_dma.sv"
+    ],
+    "unreachable": [
+      {
+        "object": "imem_rd[0]:1->0",
+        "line": 60,
+        "reason": "Provably unreachable: every RV32I instruction word has bits [1:0] == 2'b11 (the opcode field [6:0] is always odd with bit 1 set), so the fetched IMEM word's low two bits are constant 1. No legal RV32I program can make imem_rd[0] transition 1->0; waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "imem_rd[1]:1->0",
+        "line": 60,
+        "reason": "Provably unreachable: every RV32I instruction word has bits [1:0] == 2'b11 (the opcode field [6:0] is always odd with bit 1 set), so the fetched IMEM word's low two bits are constant 1. No legal RV32I program can make imem_rd[1] transition 1->0; waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_waddr[0]:0->1",
+        "line": 66,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_waddr[0]:1->0",
+        "line": 66,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_waddr[1]:0->1",
+        "line": 66,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_waddr[1]:1->0",
+        "line": 66,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_raddr[0]:0->1",
+        "line": 68,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_raddr[0]:1->0",
+        "line": 68,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_raddr[1]:0->1",
+        "line": 68,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "m_raddr[1]:1->0",
+        "line": 68,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_waddr[0]:0->1",
+        "line": 191,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_waddr[0]:1->0",
+        "line": 191,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_waddr[1]:0->1",
+        "line": 191,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_waddr[1]:1->0",
+        "line": 191,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_raddr[0]:0->1",
+        "line": 193,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_raddr[0]:1->0",
+        "line": 193,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_raddr[1]:0->1",
+        "line": 193,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "dma_m_raddr[1]:1->0",
+        "line": 193,
+        "reason": "Provably unreachable: the DMA engine performs word-aligned 32-bit copies. Both window base addresses (0x40/0x80/0xC0) and every row stride are word-indexed, so the per-word byte address is always 4-aligned; the master byte address's low two bits [1:0] are always 0 and no legal copy can make them transition. Waived as a bounded proof, not a pass."
+      },
+      {
+        "object": "bus_rvalid:1->0",
+        "line": 53,
+        "reason": "Provably unreachable: fabric reads are combinational (bus_rdata = f(bus_addr), valid in the same cycle), so the AXI-like read-valid line bus_rvalid is driven constant 1 and can never transition 1->0. Waived as a bounded proof, not a pass."
+      }
+    ],
+    "note": "Structural coverage is scoped to the SoC fabric (tiny_soc_core.sv) and the DMA engine (tiny_dma.sv): the interconnect decoder, control/status registers, operand/result SRAM, GEMM datapath, UART, instruction memory, a direct-mapped blocking instruction cache (4 lines x 4 words in the CPU fetch path, with the miss-stall assertion served to the wrapper), a direct-mapped non-blocking data cache (4 lines x 4 words in the CPU data path, bypassing to SRAM on a miss while the line refills, invalidated on host/DMA writes and on GEMM start), and the DMA engine with 2D scatter/gather, descriptor chains and interrupt (second bus master) that this stage-7 integration fixture actually contributes. The RV32I core (rv32_core.v) is reused IP that carries its own verification suite (benchmarks/rv32_single: 114 programs, 18099 retired instructions) and is compiled but not re-measured here; tiny_soc.sv is the wrapper that instantiates the CPU, does the debug/CPU bus mux, and gates the CPU clock on the cache stall. The fabric uses word-index interfaces (8-bit IMEM index, 9-byte address bus) so every fabric bit is toggle-coverable; the RV32I word-aligned PC's low address bits never reach the fabric. The bus is AXI-like: a write-ready line (bus_wready = !running) declares the operand-SRAM write port available, and a constant read-valid line (bus_rvalid) reflects that reads are combinational. coverage.unreachable declares the 19 structurally-unreachable toggle points: 2 RV32I opcode bits [1:0]=1 make imem_rd[1:0] constant 1; 16 DMA master address bits [1:0] are always 0 because every copy is word-aligned; and bus_rvalid is constant 1 because reads are combinational. They are waived with written justifications, recorded under waived_unreachable, and never counted as covered."
+  },
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "board_io": {},
+  "top_ports": {
+    "clk": "input",
+    "rst_n": "input",
+    "cpu_rst_n": "input",
+    "dbg_we": "input",
+    "dbg_re": "input",
+    "dbg_addr": "input",
+    "dbg_wdata": "input",
+    "dbg_rdata": "output",
+    "imem_we": "input",
+    "imem_waddr": "input",
+    "imem_wdata": "input",
+    "uart_tx": "output",
+    "cpu_halted": "output",
+    "dma_irq": "output"
+  },
+  "unmapped_top_ports": [
+    "clk",
+    "rst_n",
+    "cpu_rst_n",
+    "dbg_we",
+    "dbg_re",
+    "dbg_addr",
+    "dbg_wdata",
+    "dbg_rdata",
+    "imem_we",
+    "imem_waddr",
+    "imem_wdata",
+    "uart_tx",
+    "cpu_halted",
+    "dma_irq"
+  ],
+  "td_full_allowed": false,
+  "verification": {
+    "kind": "trusted-testbench",
+    "trusted_files": [
+      "tb/tb_tiny_soc.sv"
+    ]
+  },
+  "trusted_testbench_hashes": {
+    "tb/tb_tiny_soc.sv": "81d95d89fa79c353632b752c0173a7fe7d95a8d872fd5b9a632a9b1175f18c3f"
+  },
+  "checks": [
+    "synchronous reset clears done and idles the UART line high",
+    "the GEMM engine stays idle until CTRL start is pulsed",
+    "every C element read back through the bus equals the 32-bit wraparound GEMM with sign-bit ReLU",
+    "done asserts after the N^3-cycle GEMM and stays asserted while halted",
+    "UART transmits the written byte as a correct 8N1 frame (start, 8 data bits LSB-first, stop)",
+    "a second GEMM run with fresh operand matrices produces correct results",
+    "reset after a completed run clears the result register and done",
+    "the RV32I CPU drives the bus: fills A/B with 1s, starts the GEMM, polls STATUS, reads C[0]=4 into RESULT, sends UART 0x55, waits for the UART, and halts",
+    "a negative-sum GEMM clamps the ReLU result to 0 (sign-bit clamp path)",
+    "the DMA engine does a linear A->B copy with default strides and the destination words equal the diverse source data (second bus master)",
+    "the DMA engine copies across the remaining windows (C->A, B->C) and reports busy/done",
+    "the DMA engine does a 2D scatter/gather copy (source row stride 2 gathers, destination stride 4 is contiguous) and every destination word equals the gathered source word",
+    "the DMA interrupt (dma_irq pin and status[2]) asserts on done, clears on the next start, and re-asserts on the next done",
+    "the DMA engine walks a descriptor chain (descriptor 0 gathers A->B with source row stride 2; descriptor 1 copies B->C linearly and is marked last): B equals the gathered source words, C equals B, busy is observed during the chain, and the interrupt asserts once at the end of the whole chain",
+    "the bus is AXI-like handshaked: bus_wready is high while the GEMM is idle and drops while it runs, a raw write to A[0] driven during the run is dropped by the fabric (A[0] keeps its value), register writes (RESULT) are accepted regardless because they do not contend for the operand SRAM, and the host write task waits for ready before committing",
+    "the direct-mapped instruction cache refills a missing line from IMEM and serves hits combinationally: a cold probe (flush + probe) refills the line (the fabric asserts imem_stall and serves a NOP while refilling) and then returns the cached word, a hot probe of the same index is a clean hit with no refill, and the cache tags distinguish different 16-word blocks mapping to the same line",
+    "the data cache is direct-mapped and non-blocking: a cold probe of an A line misses (status valid=0) and bypasses to the SRAM word, an explicit fill makes the same line hit and return the cached word, every offset of the line hits, a host write clears the line so the next probe misses and bypasses to the new value, B and C tags distinguish windows mapping to the same line index, and starting the GEMM clears the whole cache"
+  ]
+}
