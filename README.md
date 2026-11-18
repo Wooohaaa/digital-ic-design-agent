@@ -46,6 +46,7 @@ icforge flow my-design
 - [HX1P35A HDMI 立方体实板记录](docs/hdmi-cube-flow.md)
 - [TinyStories260K 实板推理记录](docs/tinystories-flow.md)
 - [Agent 并行调度回归夹具](docs/agent-validation-roadmap.md)
+- [组合逻辑等价性检查（LEC）](docs/lec.md)
 
 ## 开发与 CI
 
