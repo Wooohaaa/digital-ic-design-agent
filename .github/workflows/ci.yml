@@ -61,3 +61,5 @@ jobs:
             uv run --locked python -m fpga_agent verify "examples/agent_validation/$project"
             uv run --locked python -m fpga_agent lint "examples/agent_validation/$project"
           done
+      - name: Check combinational equivalence and counterexamples
+        run: uv run --locked --with yowasp-yosys==0.71.0.0.post1285 --extra test python -m pytest tests/test_lec.py -q

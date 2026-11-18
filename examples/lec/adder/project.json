@@ -1,0 +1,5 @@
+{
+  "project": "lec-adder",
+  "top_module": "adder",
+  "rtl_sources": ["rtl/adder.sv"]
+}
