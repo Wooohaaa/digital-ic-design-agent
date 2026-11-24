@@ -43,6 +43,7 @@ icforge flow my-design
 - [当前验证状态与未关闭事项](docs/engineering-validation.md)
 - [实验索引与复现入口](docs/experiment-log.md)
 - [三种 RV32I CPU 结果](docs/riscv-results.md) · [流程和指令范围](docs/riscv-flow.md)
+- [RV32I 独立执行对比](docs/rv32-external-reference.md) · [ACT 2.7.4 签名验收](docs/rv32-act.md)
 - [HX1P35A HDMI 立方体实板记录](docs/hdmi-cube-flow.md)
 - [TinyStories260K 实板推理记录](docs/tinystories-flow.md)
 - [Agent 并行调度回归夹具](docs/agent-validation-roadmap.md)
