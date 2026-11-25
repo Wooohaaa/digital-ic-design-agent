@@ -371,6 +371,10 @@ def parser() -> argparse.ArgumentParser:
 
     lint = commands.add_parser('lint',help='严格 Verilator RTL lint；缺少工具时明确阻塞')
     lint.add_argument('project')
+    lec = commands.add_parser('lec', help='检查组合 RTL 与通用门级网表的等价性')
+    lec.add_argument('project')
+    lec.add_argument('--netlist', help='工程内的候选网表；省略时使用 Yosys 综合')
+    lec.add_argument('--timeout', type=int, default=120)
     review = commands.add_parser('review',help='生成规格、设计、验证、实现与交付工程审查')
     review.add_argument('project')
     review.add_argument('--scope',choices=('simulation','fpga'),default='fpga')
@@ -524,6 +528,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result,ensure_ascii=False,indent=2))
             return 0
         project = resolve_project(args.project)
+        if args.command == 'lec':
+            from .lec import run_lec
+            report = run_lec(project, timeout=args.timeout, netlist=args.netlist)
+            print('LEC: ' + report['status'] + ' — ' + report['reason'])
+            print(project / 'reports/lec.json')
+            return {'pass': 0, 'fail': 1, 'blocked': 2}[report['status']]
         if args.command == 'lint':
             from .quality import lint_project
             report = lint_project(project)
