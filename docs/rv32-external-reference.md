@@ -19,3 +19,5 @@ The fixture starts at PC 0 with text in the first page and data in `0x1000..0x10
 Engine and binary release details are available from [Unicorn Engine 2.1.4](https://github.com/unicorn-engine/unicorn/tree/2.1.4) and its [PyPI release](https://pypi.org/project/unicorn/2.1.4/).
 
 Run the pinned upstream RV32I suite separately with the [ACT signature runner](rv32-act.md).
+
+The [Stage 2 acceptance command](rv32-stage2.md) also checks terminal exceptions with native Unicorn observations and the frozen EEI policy.

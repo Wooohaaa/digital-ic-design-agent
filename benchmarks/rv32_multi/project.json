@@ -17,6 +17,10 @@
   "board_constraints": "constraints/hx1p35a.adc",
   "timing_constraints": "constraints/hx1p35a.sdc",
   "td_full_allowed": true,
+  "formal_equivalence": {
+    "required": true, "method": "reset-state-relation", "target_top": "rv32_core",
+    "reset_start": {"signal": "rst_n", "active": 0}
+  },
   "verification": {
     "kind": "riscv-retire",
     "seeds": 64,
