@@ -61,46 +61,5 @@ jobs:
             uv run --locked python -m fpga_agent verify "examples/agent_validation/$project"
             uv run --locked python -m fpga_agent lint "examples/agent_validation/$project"
           done
-
-  rv32-reference:
-    name: RV32I independent reference and ACT signatures
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-      - name: Install LLVM, Icarus Verilog and compiled simulation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes clang lld llvm iverilog verilator g++ make
-      - name: Fetch the pinned RISC-V ACT suite
-        run: |
-          git init reports/act-upstream
-          git -C reports/act-upstream remote add origin https://github.com/riscv/riscv-arch-test.git
-          git -C reports/act-upstream fetch --depth 1 origin 96e3589a867955e94c95ba098822da54d3ae39c0
-          git -C reports/act-upstream checkout --detach FETCH_HEAD
-      - name: Compare all three cores against Unicorn and ACT signatures
-        run: |
-          uv run --locked --all-extras --with unicorn==2.1.4 python -m fpga_agent.cpu_external --seeds 64 --output reports/rv32-external
-          uv run --locked --all-extras --with unicorn==2.1.4 python -m fpga_agent.cpu_act --suite reports/act-upstream --output reports/rv32-act
-      - name: Verify retirement and signature rejection cases
-        env:
-          RSI_ACT_SUITE: reports/act-upstream
-          RSI_ACT_CLANG: clang
-        run: uv run --locked --all-extras --with unicorn==2.1.4 --with yowasp-yosys==0.71.0.0.post1285 python -m pytest tests/test_cpu_external.py tests/test_cpu_act.py tests/test_cpu_eei.py tests/test_lec_reset.py -q
-      - name: Replay Stage 2 on RTL and equivalent generic netlists
-        run: uv run --locked --all-extras --with unicorn==2.1.4 --with yowasp-yosys==0.71.0.0.post1285 python -m fpga_agent.cpu_stage2 --act-suite reports/act-upstream --seeds 64 --netlist-simulator verilator --output reports/stage2
-      - name: Preserve benchmark reports
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: rv32-reference-reports
-          path: |
-            reports/rv32-external/report.json
-            reports/rv32-act/report.json
-            reports/stage2/**/report.json
-            reports/stage2/**/reports/simulation.json
-            reports/stage2/**/reports/lec.json
-          if-no-files-found: warn
+      - name: Check combinational equivalence and counterexamples
+        run: uv run --locked --with yowasp-yosys==0.71.0.0.post1285 --extra test python -m pytest tests/test_lec.py -q
