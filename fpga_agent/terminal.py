@@ -26,6 +26,9 @@ COMMANDS = {
     "/design": "生成 RTL：/design 需求描述", "/cpu": "生成 CPU：/cpu name multi --full",
     "/verify": "独立仿真验证", "/synth": "TD 逻辑综合", "/td": "TD 综合与布局布线",
     "/lint": "严格 RTL lint", "/review": "工程团队审查与未完成事项",
+    "/lec": "Yosys 综合与保守直接 SAT 等价性检查",
+    "/spec-check": "运行工程独立规格证明",
+    "/sv-check": "SV 子集语义差分、独立前端与官方 UVM 探针",
     "/flow": "仿真 → TD → 交付", "/package": "生成交付包", "/suite": "三个 CPU 回归",
     "/replay": "重放当前 CPU 的 Luna 响应", "/status": "查看证据与工具状态",
     "/artifacts": "浏览交付与报告", "/files": "搜索与预览工程文件", "/open": "预览文件：/open rtl/core.v",
@@ -291,6 +294,16 @@ def evidence(project: Path) -> dict:
             result[key] = "stale"
             result[key + "_reason"] = str(exc)
     result['hardware_required']=manifest.get('hardware_acceptance',{}).get('required') is True
+    from .lec import lec_valid
+    lec_report = read_json(project / 'reports/lec.json', {})
+    valid, reason = lec_valid(project, lec_report)
+    result['lec'] = 'current' if valid else 'failed' if lec_report.get('status') == 'fail' else 'stale' if lec_report else 'missing'
+    result['lec_reason'] = reason
+    result['lec_required'] = manifest.get('formal_equivalence', {}).get('required') is True
+    from .spec_gate import specification_evidence
+    specification = specification_evidence(project)
+    result.update(specification=specification.status, specification_reason=specification.reason,
+                  specification_required=specification.required)
     if manifest.get('verification',{}).get('kind')=='hdmi-cube':
         from .video_hardware import evidence_valid
         hardware=read_json(project/'reports/hardware-video.json',{})
@@ -320,10 +333,17 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
     project = workspace.resolve(project_value) if project_value else workspace.resolve(str(selected)) if selected else None
     cli = [sys.executable, "-u", "-m", "fpga_agent"]
     commands = []
+    if action == 'sv-check':
+        backend = arguments.get('sv_backend', 'icarus')
+        if backend not in ('icarus', 'modelsim', 'verilator'):
+            raise ValueError('sv_backend 必须为 icarus、modelsim 或 verilator。')
+        return TaskPlan('Bounded SV/UVM capability check',
+                        [cli+['sv-check','--backend',backend,'--output',
+                              str(workspace.root/('reports/sv-conformance-'+backend+'.json'))]])
     if action == "suite":
         commands = [cli + ["cpu-suite", "--root", str(workspace.root / "benchmarks")] + (["--full"] if full else [])]
         return TaskPlan("RISC-V benchmark suite", commands)
-    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review", "video-hardware"}:
+    if action not in {"init", "design", "cpu-design", "tinyllm", "verify", "synth", "td", "flow", "package", "replay", "lint", "review", "lec", "spec-check", "video-hardware"}:
         raise ValueError(f"不支持的工具：{action}")
     if not project:
         raise ValueError("先使用 /project 选择工程，或 /init name 创建工程。")
@@ -376,7 +396,7 @@ def make_plan(workspace: Workspace, settings: Settings, action: str, arguments: 
                 if device is not None:
                     if not isinstance(device,str) or not device.strip():raise ValueError('device 必须是采集设备名称。')
                     commands[0] += ['--device',device]
-            if action == "package" and arguments.get("simulation_only") is True:
+            if action in {"package", "flow"} and arguments.get("simulation_only") is True:
                 commands[0].append("--simulation-only")
             if action == 'review' and arguments.get('simulation_only') is True:
                 commands[0] += ['--scope','simulation']

@@ -1,0 +1,7 @@
+{
+  "board": "HX1P35A",
+  "device": "PH1P35MDG324",
+  "device_family": "ph1",
+  "signals": {},
+  "confidence": "Verification fixture only. No approved pin mapping."
+}

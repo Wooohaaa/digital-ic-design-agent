@@ -1,0 +1,12 @@
+{
+  "project": "lec-merged-counter",
+  "top_module": "core",
+  "testbench_top": "tb_merged_counter",
+  "rtl_sources": ["rtl/core.v"],
+  "testbench_sources": ["tb/tb_merged_counter.sv"],
+  "formal_equivalence": {
+    "required": true,
+    "method": "reset-state-relation",
+    "reset_start": {"signal": "rst_n", "active": 0}
+  }
+}

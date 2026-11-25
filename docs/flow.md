@@ -51,3 +51,4 @@ fpga-agent package <工程目录>
 - 对摄像头/DDR/HDMI 等板级 IP 项目读取并维护官方 TD 基线，限制 AI 只修改自有数据通路模块。
 
 参考 RSI-Chip 的工程思想时，本项目保留 RTL + 自检仿真 + 明确 signoff gate 的路径；不将其 CPU/EDA 实现直接移植到 PH1P35。
+对于没有部署引脚映射的工程，可运行 `icforge flow <project> --simulation-only`，一次完成仿真、声明的独立规格与 LEC、以及仿真范围交付。见[规格门禁试点](spec-acceptance.md)。

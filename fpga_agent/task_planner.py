@@ -44,7 +44,7 @@ Maintain memory (at most 12000 characters): a rolling factual checkpoint of deci
 failed approaches and unresolved requirements needed beyond the recent history. Preserve user constraints.
 Choose exactly one typed tool per execute decision. Available tools and arguments are described
 in the supplied schema. design/cpu-design generate and repair candidates; verify runs verification;
-td implements; package archives; review inspects engineering findings.
+td implements; package archives; review inspects engineering findings; spec-check proves a declared independent specification.
 init creates a project template; synth runs TD synthesis; flow runs verify, TD and package;
 tinyllm prepares/verifies the fixed TinyStories260K workload; suite runs the prepared CPU regressions.
 video-hardware captures an already programmed HDMI cube and checks independent geometry and rotation.

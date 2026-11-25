@@ -1,5 +1,8 @@
 {
   "project": "lec-adder",
   "top_module": "adder",
-  "rtl_sources": ["rtl/adder.sv"]
+  "testbench_top": "tb_adder",
+  "rtl_sources": ["rtl/adder.sv"],
+  "testbench_sources": ["tb/tb_adder.sv"],
+  "formal_equivalence": {"required": true}
 }

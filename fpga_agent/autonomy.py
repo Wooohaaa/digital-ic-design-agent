@@ -375,6 +375,10 @@ def completion_gate(workspace: Workspace, task: dict) -> tuple[bool, str]:
     state = evidence(project)
     if state["simulation"] != "current":
         return False, "仿真证据尚未通过或已过期。"
+    if state.get('lec_required') and state.get('lec') != 'current':
+        return False, '工程要求的 LEC 证据尚未通过或已过期。'
+    if state.get('specification_required') and state.get('specification') != 'current':
+        return False, '工程独立规格门禁未通过：' + state['specification_reason']
     if task["target"] == "simulation":
         return True, "当前输入的仿真验收通过。"
     if state["implementation"] != "current":
@@ -394,6 +398,13 @@ def completion_gate(workspace: Workspace, task: dict) -> tuple[bool, str]:
             return False, "交付 ZIP 指纹不匹配。"
         with zipfile.ZipFile(artifact) as archive:
             delivery = json.loads(archive.read("delivery.json"))
+            from .spec_gate import REPORT as SPEC_REPORT, specification_evidence, verify_archived_spec
+            specification = specification_evidence(project)
+            if specification.required:
+                if (specification.status != 'current'
+                        or delivery.get('specification_report_sha256') != specification.artifacts[SPEC_REPORT]):
+                    return False, '交付包独立规格证据已过期。'
+                verify_archived_spec(archive, specification.artifacts)
             if hardware_required:
                 recorded=delivery.get('hardware_report_sha256')
                 if recorded!=sha(project/'reports/hardware-video.json') or hashlib.sha256(archive.read('reports/hardware-video.json')).hexdigest()!=recorded:

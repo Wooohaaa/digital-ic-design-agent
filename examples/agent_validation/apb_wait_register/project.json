@@ -1,0 +1,26 @@
+{
+  "project": "validation-apb-wait-register",
+  "top_module": "apb_wait_register",
+  "testbench_top": "tb_apb_wait_register",
+  "rtl_sources": ["rtl/apb_wait_register.sv"],
+  "testbench_sources": ["tb/tb_apb_wait_register.sv"],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "board_io": {},
+  "td_full_allowed": false,
+  "unmapped_top_ports": ["clk", "rst_n", "psel", "penable", "pwrite", "paddr", "pwdata",
+                         "prdata", "pready", "pslverr"],
+  "verification": {"kind": "trusted-testbench", "trusted_files": ["tb/tb_apb_wait_register.sv"]},
+  "trusted_testbench_hashes": {"tb/tb_apb_wait_register.sv": "eb497983ea1a3a87a45ade530a66a49f7027e2554b3018cf982d2a8ce2e2f19b"},
+  "formal_equivalence": {"required": true, "method": "state-bijection"},
+  "formal_specification": {
+    "required": true,
+    "contract": "spec/contract.json",
+    "trusted_hashes": {
+      "spec/contract.json": "395388b85e0b8d7a9542065a191b5ecfbe22484fbf38ca6e86dd5a34bce0090b",
+      "spec/apb_reference.sv": "d2c5ef32e3bb21039a16ffde5ff08f0d4f1968c243bb8aa2c3127f40c8341a8d"
+    }
+  }
+}

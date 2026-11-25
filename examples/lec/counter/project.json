@@ -1,0 +1,25 @@
+{
+  "project": "lec-counter",
+  "top_module": "counter_demo",
+  "testbench_top": "tb_counter",
+  "rtl_sources": ["rtl/counter_demo.sv", "rtl/counter.sv"],
+  "testbench_sources": ["tb/tb_counter.sv"],
+  "board_constraints": "constraints/pins.adc",
+  "timing_constraints": "constraints/clock.sdc",
+  "device_family": "ph1",
+  "device": "PH1P35MDG324",
+  "board_io": {},
+  "td_full_allowed": false,
+  "unmapped_top_ports": ["clk", "rst", "en", "q"],
+  "verification": {"kind": "trusted-testbench", "trusted_files": ["tb/tb_counter.sv"]},
+  "trusted_testbench_hashes": {"tb/tb_counter.sv": "b6ef9ecbe1b61f1fd14fef76e34c2dc6a4da8756e76789df7e04ab201055ffdb"},
+  "formal_equivalence": {"required": true, "method": "state-bijection"},
+  "formal_specification": {
+    "required": true,
+    "contract": "spec/contract.json",
+    "trusted_hashes": {
+      "spec/contract.json": "468be6eda7e41e45132e1eec8682a1baa1029e35d42d1c4c44af06ff7978ea91",
+      "spec/counter_reference.sv": "c93bfa53c34295d8e16ad6bff5118a9b9c8098be42e35539667846ae9e92c4f6"
+    }
+  }
+}
