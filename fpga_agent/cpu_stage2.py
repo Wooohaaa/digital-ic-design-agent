@@ -113,7 +113,8 @@ def _negative_controls(root: Path, output: Path, rtl: Path, summary: dict) -> No
                                  **_receipt(output, output/'fault-negative-control/report.json')}
 
 
-def run_stage2(root: Path, suite: Path, clang: str, output: Path, seeds: int = 256) -> dict:
+def run_stage2(root: Path, suite: Path, clang: str, output: Path, seeds: int = 256,
+               *, netlist_simulator: str = 'icarus') -> dict:
     root, output = root.resolve(), output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     report = {'status': 'fail', 'runner_sha256': sha(Path(__file__)), 'seeds': seeds, 'gates': {},
@@ -148,7 +149,8 @@ def run_stage2(root: Path, suite: Path, clang: str, output: Path, seeds: int = 2
         tests = {}
         for label, sources in (('rtl', output/'replay-source'), ('netlist', output/'netlist-source')):
             directory = output/f'act-{label}'
-            result = run_act_matrix(sources, suite, directory, clang, cases)
+            result = run_act_matrix(sources, suite, directory, clang, cases,
+                                    simulator=netlist_simulator if label == 'netlist' else 'icarus')
             _require(result['status'] == 'pass', f'ACT {label} signature matrix failed')
             tests[label] = {**_receipt(output, directory/'report.json'), 'cases_per_core': len(cases)}
         for case in cases:
@@ -171,11 +173,15 @@ def main() -> int:
     parser.add_argument('--clang', default='clang')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seeds', type=int, default=256)
+    parser.add_argument('--netlist-simulator', choices=('icarus', 'verilator'), default='icarus')
     args = parser.parse_args()
     if not 64 <= args.seeds <= 1024:
         parser.error('--seeds must be between 64 and 1024')
-    report = run_stage2(Path.cwd(), args.act_suite, args.clang, args.output, args.seeds)
+    report = run_stage2(Path.cwd(), args.act_suite, args.clang, args.output, args.seeds,
+                        netlist_simulator=args.netlist_simulator)
     print(f"Stage 2 acceptance: {report['status']}; report: {args.output/'report.json'}")
+    if 'error' in report:
+        print(report['error'])
     return int(report['status'] != 'pass')
 
 

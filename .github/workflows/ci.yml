@@ -71,10 +71,10 @@ jobs:
         with:
           python-version: '3.12'
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-      - name: Install LLVM and Icarus Verilog
+      - name: Install LLVM, Icarus Verilog and compiled simulation tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang lld llvm iverilog
+          sudo apt-get install --yes clang lld llvm iverilog verilator g++ make
       - name: Fetch the pinned RISC-V ACT suite
         run: |
           git init reports/act-upstream
@@ -91,7 +91,7 @@ jobs:
           RSI_ACT_CLANG: clang
         run: uv run --locked --all-extras --with unicorn==2.1.4 --with yowasp-yosys==0.71.0.0.post1285 python -m pytest tests/test_cpu_external.py tests/test_cpu_act.py tests/test_cpu_eei.py tests/test_lec_reset.py -q
       - name: Replay Stage 2 on RTL and equivalent generic netlists
-        run: uv run --locked --all-extras --with unicorn==2.1.4 --with yowasp-yosys==0.71.0.0.post1285 python -m fpga_agent.cpu_stage2 --act-suite reports/act-upstream --seeds 64 --output reports/stage2
+        run: uv run --locked --all-extras --with unicorn==2.1.4 --with yowasp-yosys==0.71.0.0.post1285 python -m fpga_agent.cpu_stage2 --act-suite reports/act-upstream --seeds 64 --netlist-simulator verilator --output reports/stage2
       - name: Preserve benchmark reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

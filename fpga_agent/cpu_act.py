@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+import os
 import re
 import shutil
 import struct
@@ -79,8 +80,9 @@ def parse_signature(stdout: str, layout: Layout) -> tuple[list[int], int]:
     return list(actual.values()), stop[0]
 
 
-def external_signature(engine, registers, image: bytes, layout: Layout) -> list[int]:
-    model = engine.Uc(engine.UC_ARCH_RISCV, engine.UC_MODE_RISCV32)
+def external_signature(engine, registers, image: bytes, layout: Layout, *, xlen: int = 32) -> list[int]:
+    mode = {32: engine.UC_MODE_RISCV32, 64: engine.UC_MODE_RISCV64}[xlen]
+    model = engine.Uc(engine.UC_ARCH_RISCV, mode)
     model.mem_map(0, RAM_SIZE)
     model.mem_write(0, image)
     model.mem_protect(0, DATA_BASE, engine.UC_PROT_READ | engine.UC_PROT_EXEC)
@@ -94,12 +96,13 @@ def external_signature(engine, registers, image: bytes, layout: Layout) -> list[
     return [word for (word,) in struct.iter_unpack('<I', signature)]
 
 
-def _snapshot_suite(source: Path, output: Path, names: tuple[str, ...]) -> dict:
-    locked = json.loads((ASSETS/'suite.json').read_bytes())
-    selected = tuple(f'{CASES}/{name}.S' for name in names)
+def _snapshot_suite(source: Path, output: Path, names: tuple[str, ...], *, xlen: int = 32) -> dict:
+    assets = {32: ASSETS, 64: ASSETS.with_name('rv64-act')}[xlen]
+    locked = json.loads((assets/'suite.json').read_bytes())
+    selected = tuple(f'{UPSTREAM}/rv{xlen}i_m/I/src/{name}.S' for name in names)
     for name in selected:
         if name not in locked['files']:
-            raise ValueError(f'Case outside the pinned RV32I inventory: {name}')
+            raise ValueError(f'Case outside the pinned RV{xlen}I inventory: {name}')
     files = {}
     for name in (f'{UPSTREAM}/env/arch_test.h', f'{UPSTREAM}/env/encoding.h', *selected):
         path = source/name
@@ -125,14 +128,32 @@ def _toolchain(clang: str) -> tuple[str, str, str]:
     return compiler, str(nm), str(objcopy)
 
 
-def _build_case(out: Path, name: str, toolchain: tuple[str, str, str], env: dict) -> tuple[bytes, Layout]:
+def _compile_verilator(source: Path, tb: Path, top: str, directory: Path, env: dict,
+                       *, defines: tuple[str, ...] = ()) -> list[str]:
+    compiler = shutil.which('verilator') or shutil.which('verilator_bin')
+    make = shutil.which('make') or shutil.which('mingw32-make')
+    if not compiler or not make or not shutil.which('g++'):
+        raise ValueError('Verilator, make and g++ are required for compiled ACT netlist simulation')
+    binary = 'sim.exe' if os.name == 'nt' else 'sim'
+    _run([compiler, '--cc', '--exe', '--main', '--timing', '--assert', '--top-module', top,
+          '--prefix', 'Vact', '-Wno-fatal', '-CFLAGS', '-std=c++20 -O1',
+          '--Mdir', 'obj', '-o', binary, *(f'-D{define}' for define in defines), str(source), str(tb)],
+         directory, env, directory / 'compile.log', 180)
+    _run([make, '-C', 'obj', '-f', 'Vact.mk', '-j2'], directory, env, directory / 'build.log', 360)
+    return [str(directory / 'obj' / binary)]
+
+
+def _build_case(out: Path, name: str, toolchain: tuple[str, str, str], env: dict,
+                *, xlen: int = 32) -> tuple[bytes, Layout]:
     compiler, nm, objcopy = toolchain
+    abi = {32: 'ilp32', 64: 'lp64'}[xlen]
+    cases = f'{UPSTREAM}/rv{xlen}i_m/I/src'
     directory = out/'cases'/name
     directory.mkdir(parents=True)
-    _run([compiler, '--target=riscv32-unknown-elf', '-fuse-ld=lld', '-march=rv32i', '-mabi=ilp32',
-          '-DXLEN=32', '-mno-relax', '-nostdlib',
+    _run([compiler, f'--target=riscv{xlen}-unknown-elf', '-fuse-ld=lld', f'-march=rv{xlen}i', f'-mabi={abi}',
+          f'-DXLEN={xlen}', '-mno-relax', '-nostdlib',
           '-Wl,--no-relax,--build-id=none', '-T', str(out/'link.ld'), '-I', str(out),
-          '-I', str(out/'upstream'/UPSTREAM/'env'), str(out/'upstream'/CASES/f'{name}.S'),
+          '-I', str(out/'upstream'/UPSTREAM/'env'), str(out/'upstream'/cases/f'{name}.S'),
           '-o', 'test.elf'], directory, env, directory/'build.log', 60)
     symbols = _run([nm, '--defined-only', 'test.elf'], directory, env, directory/'symbols.log', 15)
     _run([objcopy, '-O', 'binary', 'test.elf', 'test.bin'], directory, env, directory/'objcopy.log', 15)
@@ -147,15 +168,18 @@ def _build_case(out: Path, name: str, toolchain: tuple[str, str, str], env: dict
 
 
 def run_act_matrix(root: Path, suite: Path, output: Path, clang: str,
-                   names: tuple[str, ...], cores: tuple[str, ...] = CORES) -> dict:
+                   names: tuple[str, ...], cores: tuple[str, ...] = CORES,
+                   *, simulator: str = 'icarus') -> dict:
     root, suite, output = root.resolve(), suite.resolve(), output.resolve()
     if (not names or len(set(names)) != len(names) or not cores or len(set(cores)) != len(cores)
             or not set(cores) <= set(CORES) or any(not re.fullmatch(r'[a-z0-9-]+', name) for name in names)):
         raise ValueError('Expected a nonempty unique selection of pinned cases and supported cores')
+    if simulator not in {'icarus', 'verilator'}:
+        raise ValueError('Unknown ACT simulator')
     output.mkdir(parents=True, exist_ok=False)
     report = {'schema_version': 1, 'status': 'blocked', 'runner_sha256': sha(Path(__file__)),
               'scope': 'ACT RV32I aligned signature comparison under the non-privileged test EEI',
-              'cores': {}, 'cases': {}}
+              'cores': {}, 'cases': {}, 'simulator': simulator}
     errors = (OSError, ValueError, RuntimeError, subprocess.SubprocessError)
     try:
         report['upstream'] = _snapshot_suite(suite, output, names)
@@ -195,13 +219,17 @@ def run_act_matrix(root: Path, suite: Path, output: Path, clang: str,
             shutil.copyfile(source, snapshot)
             result = {'rtl_sha256': sha(snapshot), 'cases': {}}
             report['cores'][core] = result
-            _run([compiler, '-g2012', '-Wall', '-s', 'tb_act', '-o', 'cpu.vvp',
-                  'rv32_core.v', '../tb_act.sv'], directory, env, directory/'compile.log', 120)
+            if simulator == 'verilator':
+                runtime_argv = _compile_verilator(snapshot, output/'tb_act.sv', 'tb_act', directory, env)
+            else:
+                _run([compiler, '-g2012', '-Wall', '-s', 'tb_act', '-o', 'cpu.vvp',
+                      'rv32_core.v', '../tb_act.sv'], directory, env, directory/'compile.log', 120)
+                runtime_argv = [runtime, 'cpu.vvp']
             for name, (layout, reference) in expected.items():
                 row = {'status': 'fail'}
                 result['cases'][name] = row
                 try:
-                    actual = _run([runtime, 'cpu.vvp', f'+IMAGE=../cases/{name}/image.hex',
+                    actual = _run([*runtime_argv, f'+IMAGE=../cases/{name}/image.hex',
                                    f'+BEGIN={layout.begin:08x}', f'+END={layout.end:08x}',
                                    f'+HALT={layout.halt:08x}'],
                                   directory, env, directory/f'{name}.log', 25)
