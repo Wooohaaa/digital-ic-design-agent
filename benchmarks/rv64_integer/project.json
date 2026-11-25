@@ -1,0 +1,6 @@
+{
+  "top_module": "rv64_integer",
+  "rtl_sources": ["rtl/rv64_integer.v"],
+  "testbench_sources": ["tb/tb_rv64_integer.sv"],
+  "formal_equivalence": {"required": true, "method": "state-bijection"}
+}

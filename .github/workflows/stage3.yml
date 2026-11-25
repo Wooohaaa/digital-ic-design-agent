@@ -1,0 +1,67 @@
+name: Stage 3 RV64 acceptance
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/stage3.yml
+      - 'benchmarks/rv64_integer/**'
+      - 'benchmarks/sv39_walker/**'
+      - 'fpga_agent/cpu*.py'
+      - 'fpga_agent/lec*.py'
+      - 'fpga_agent/rv64*.py'
+      - 'fpga_agent/sv39_accept.py'
+      - 'fpga_agent/templates/rv*-act/**'
+      - 'tests/test_cpu_stage3*.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      UV_PYTHON: '3.12'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+      - name: Install LLVM and the pinned FPGA toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang lld llvm g++ make
+          curl --fail --location --retry 3 https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-11-17/oss-cad-suite-linux-x64-20261117.tgz --output "$RUNNER_TEMP/oss-cad.tgz"
+          (cd "$RUNNER_TEMP" && echo 'd31c77e62aff4c922285ffc5265afa92034199206abb188bc72c0ee97b85e749  oss-cad.tgz' | sha256sum --check --status)
+          tar -xzf "$RUNNER_TEMP/oss-cad.tgz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/oss-cad-suite/bin" >> "$GITHUB_PATH"
+      - name: Obtain the fixed ACT sources
+        run: |
+          git init reports/act-upstream
+          git -C reports/act-upstream remote add origin https://github.com/riscv/riscv-arch-test.git
+          git -C reports/act-upstream fetch --depth 1 origin 96e3589a867955e94c95ba098822da54d3ae39c0
+          git -C reports/act-upstream checkout --detach FETCH_HEAD
+      - name: Replay RV64 integer and base plus machine configurations
+        run: |
+          uv run --locked --with unicorn==2.1.4 python -m fpga_agent.cpu_stage3 --seeds 4 --output reports/rv64-m1
+          uv run --locked --with unicorn==2.1.4 python -m fpga_agent.cpu_rv64 --seeds 8 --output reports/rv64-runtime
+          uv run --locked --with unicorn==2.1.4 --all-extras pytest -q tests/test_cpu_stage3.py tests/test_cpu_stage3_runtime.py
+      - name: Check upstream RV64I signatures on RTL and the proved netlist
+        run: |
+          uv run --locked --with unicorn==2.1.4 python -m fpga_agent.rv64_act --suite reports/act-upstream --proof-project reports/rv64-runtime/rv64i/project --output reports/rv64-act
+      - name: Check the standalone Sv39 walker
+        run: uv run --locked python -m fpga_agent.sv39_accept --output reports/sv39-walker
+      - name: Route the core on ECP5
+        run: uv run --locked python -m fpga_agent.rv64_fpga --output reports/rv64-ecp5
+      - name: Preserve verification and timing reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stage3-rv64-evidence
+          path: |
+            reports/*/report.json
+            reports/*/**/reports/lec.json
+            reports/rv64-ecp5/timing.json
+          if-no-files-found: warn
