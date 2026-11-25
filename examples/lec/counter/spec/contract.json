@@ -1,0 +1,18 @@
+{
+  "name": "counter_demo",
+  "reference": "spec/counter_reference.sv",
+  "reference_top": "counter_reference",
+  "inputs": {"clk": 1, "rst": 1, "en": 1},
+  "reset": "rst",
+  "active": 1,
+  "parameters": {"RESET_ACTIVE": 1},
+  "projections": [],
+  "covers": {
+    "reachable_zero": {"signal": "count", "value": 0, "steps": 2},
+    "reachable_carry": {"signal": "count", "value": 16, "steps": 18, "stimulus": [["en", 1]]}
+  },
+  "mutations": {
+    "wrong_reset_polarity": {"before": "rst == RESET_ACTIVE", "after": "rst != RESET_ACTIVE", "obligation": "reset_base", "steps": 3},
+    "increments_when_disabled": {"unit": 1, "before": "else if (en) q", "after": "else q", "obligation": "preservation", "steps": 3}
+  }
+}

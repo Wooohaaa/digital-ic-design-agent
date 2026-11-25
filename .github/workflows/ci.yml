@@ -38,6 +38,26 @@ jobs:
       - name: Build wheel
         run: uv build --wheel --python ${{ matrix.python }}
 
+  lec-fixtures:
+    name: Generic synthesis and direct SAT LEC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Exercise real equivalence and rejection cases
+        run: uv run --locked --all-extras --with yowasp-yosys==0.71.0.0.post1285 python -m pytest tests/test_lec.py tests/test_lec_state.py tests/test_lec_reset.py tests/test_lec_gate.py tests/test_spec_proof.py -q
+      - name: Prove combinational and sequential fixtures
+        run: uv run --locked --with yowasp-yosys==0.71.0.0.post1285 python scripts/run_lec_matrix.py --cpu-cores --project-cpus
+      - name: Install Icarus for the specification delivery gate
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog
+      - name: Exercise independent specification gates and archived evidence
+        run: uv run --locked --all-extras --with yowasp-yosys==0.71.0.0.post1285 python -m pytest tests/test_project_spec_gate.py -q
+
   hdl-fixtures:
     name: HDL fixtures / Icarus + Verilator
     runs-on: ubuntu-latest
@@ -57,10 +77,52 @@ jobs:
         run: uv sync --locked --all-extras --python 3.12
       - name: Verify trusted fixtures
         run: |
-          for project in sync_fifo spi_master apb_pwm_timer; do
+          for project in sync_fifo spi_master apb_pwm_timer apb_wait_register; do
             uv run --locked python -m fpga_agent verify "examples/agent_validation/$project"
             uv run --locked python -m fpga_agent lint "examples/agent_validation/$project"
           done
+      - name: Check bounded SV semantic baseline (not full SV/UVM conformance)
+        run: uv run --locked --all-extras python -m fpga_agent sv-check --required-only
+      - name: Compare RV32I cores against an external ISA reference
+        run: |
+          uv run --locked --all-extras --with unicorn==2.1.4 python -m fpga_agent.cpu_external --seeds 4 --output reports/rv32-external
+          uv run --locked --all-extras --with unicorn==2.1.4 python -m pytest tests/test_cpu_external.py -q
+
+  open-sv-runtime:
+    name: Open runtime / nine bounded two-state SV cases
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - name: Install GNU C++20 build tools
+        run: |
+          apt-get update
+          apt-get install --yes ca-certificates curl git g++ make perl
+          g++ --version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - name: Install checksum-pinned OSS CAD Suite 2026-11-17
+        run: |
+          curl --fail --location --retry 3 https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-11-17/oss-cad-suite-linux-x64-20261117.tgz --output /tmp/oss-cad-suite.tgz
+          echo 'd31c77e62aff4c922285ffc5265afa92034199206abb188bc72c0ee97b85e749  /tmp/oss-cad-suite.tgz' | sha256sum --check --status
+          mkdir .oss
+          tar -xzf /tmp/oss-cad-suite.tgz -C .oss
+          echo "$GITHUB_WORKSPACE/.oss/oss-cad-suite/bin" >> "$GITHUB_PATH"
+      - name: Install IC Forge
+        run: |
+          uv python install 3.12
+          uv sync --locked --all-extras --python 3.12
+      - name: Execute common two-state SV contract including virtual dispatch and modports
+        run: |
+          verilator --version
+          uv run --locked --all-extras python -m fpga_agent sv-check --backend verilator --timeout 180 --output reports/open-sv-common.json --case SV-INT --case SV-PACKED --case SV-PACKAGE --case SV-GENERATE --case SV-NBA --case SV-ARRAY --case SV-REJECT --case SV-CLASS --case SV-INTERFACE
+          uv run --locked --all-extras python -c 'from pathlib import Path; from fpga_agent.sv_conformance import conformance_valid; valid, reason = conformance_valid(Path("reports/open-sv-common.json")); print(reason); raise SystemExit(0 if valid else 1)'
+      - name: Preserve bounded runtime evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: open-sv-runtime-evidence
+          path: reports/
+          if-no-files-found: warn
 
   rv32-reference:
     name: RV32I independent reference and ACT signatures

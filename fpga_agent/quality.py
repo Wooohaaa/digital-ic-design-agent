@@ -43,6 +43,9 @@ def _verilator_command() -> list[str]:
         return [executable]
     if os.name != 'nt':
         return []
+    native = shutil.which('verilator_bin')
+    if native:
+        return [native]
     for entry in os.environ.get('PATH', '').split(os.pathsep):
         if not entry:
             continue
@@ -190,8 +193,20 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         board = read_report(project / 'board/hx1p35a.json')
         add('BOARD-001','integration','review_required',str(board.get('confidence','Board revision and schematic confirmation not recorded.')),
             'Confirm device, board revision, pinout, oscillator and IO voltages against the actual schematic.',['board/hx1p35a.json'])
+    from .lec import lec_valid
+    valid_lec, lec_reason = lec_valid(project, read_report(project / 'reports/lec.json'))
+    lec_required = manifest.get('formal_equivalence', {}).get('required') is True
+    add('LEC-001', 'verification', 'pass' if valid_lec else 'blocked' if lec_required else 'not_run',
+        lec_reason, '' if valid_lec else 'Run icforge lec and resolve every unproven equivalence cell.',
+        ['reports/lec.json'], required=lec_required)
+    from .spec_gate import REPORT as SPEC_REPORT, specification_evidence
+    specification = specification_evidence(project)
+    add('FORMAL-001', 'verification', 'pass' if specification.status == 'current' else specification.status,
+        specification.reason, 'Run icforge spec-check and resolve the independent specification failure.'
+        if specification.required and specification.status != 'current' else '',
+        [SPEC_REPORT] if specification.required else [], required=specification.required)
     add('DV-004','verification','not_run',
-        'Code/toggle coverage, formal properties/equivalence and post-route simulation are not evidenced by this flow.',
+        'Code/toggle coverage and post-route simulation are not evidenced here; specification proof and LEC are tracked separately.',
         'Select required analyses in the verification plan and collect tool-produced evidence.',required=False)
     hardware_ok=False
     hardware_detail='Physical board programming and measurement have not been performed.'
@@ -206,6 +221,8 @@ def review_project(project: Path, scope: str = 'fpga', *, write: bool = True) ->
         '' if hardware_ok else 'Program the board and record observed outputs against the hardware acceptance procedure.',
         ['reports/hardware.json','reports/hardware-uart.txt'] if tinyllm else ['reports/hardware-video.json'] if hdmi else [],required=hardware_required)
     artifact_ready = valid_sim and (scope == 'simulation' or valid_td) and (not hardware_required or hardware_ok)
+    artifact_ready = artifact_ready and (not lec_required or valid_lec)
+    artifact_ready = artifact_ready and (not specification.required or specification.status == 'current')
     profile = ('trusted-rv32i-differential' if cpu else 'trusted-tinystories-fp32' if tinyllm else
                'trusted-hdmi-cube' if hdmi else 'trusted-hdl-testbench' if trusted_hdl else 'generated-self-check')
     report = {'schema_version':1,'created_at':datetime.now(timezone.utc).isoformat(),

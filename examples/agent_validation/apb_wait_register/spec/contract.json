@@ -1,0 +1,29 @@
+{
+  "name": "apb_wait_register",
+  "reference": "spec/apb_reference.sv",
+  "reference_top": "apb_wait_reference",
+  "inputs": {"clk": 1, "rst_n": 1, "psel": 1, "penable": 1, "pwrite": 1, "paddr": 8, "pwdata": 8},
+  "reset": "rst_n",
+  "active": 0,
+  "projections": [["phase", "phase"], ["setup_write", "setup_write"], ["setup_addr", "setup_addr"],
+                  ["setup_data", "setup_data"], ["value", "value"], ["write_count", "write_count"]],
+  "covers": {
+    "reachable_wait": {"signal": "wait_pending", "value": 1, "steps": 3},
+    "reachable_two_writes": {"signal": "accepted_writes", "value": 2, "steps": 8,
+                             "stimulus": [["psel", 1], ["paddr", 0], ["pwrite", 1]]},
+    "reachable_error": {"signal": "error_response", "value": 1, "steps": 4,
+                        "stimulus": [["psel", 1], ["paddr", 4], ["pwrite", 1]]}
+  },
+  "mutations": {
+    "no_wait": {"before": "(phase == COMPLETE);", "after": "(phase == WAIT_ACCESS);",
+                "obligation": "preservation", "steps": 5},
+    "repeated_completion": {"before": "access && phase == WAIT_ACCESS",
+                            "after": "access && phase != IDLE", "obligation": "preservation", "steps": 6},
+    "ignores_reset": {"before": "if (!rst_n) begin", "after": "if (!rst_n && !psel) begin",
+                      "obligation": "reset_base", "steps": 5},
+    "uses_live_data": {"before": "value <= setup_data;", "after": "value <= setup_data ^ pwdata;",
+                       "obligation": "preservation", "steps": 8},
+    "writes_on_error": {"before": "if (pready && setup_write && valid)",
+                        "after": "if (pready && setup_write)", "obligation": "preservation", "steps": 8}
+  }
+}

@@ -8,6 +8,7 @@ on:
       - 'benchmarks/sv39_walker/**'
       - 'fpga_agent/cpu*.py'
       - 'fpga_agent/lec*.py'
+      - 'fpga_agent/evidence.py'
       - 'fpga_agent/rv64*.py'
       - 'fpga_agent/sv39_accept.py'
       - 'fpga_agent/templates/rv*-act/**'

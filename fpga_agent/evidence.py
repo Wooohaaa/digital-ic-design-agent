@@ -75,7 +75,7 @@ def sha(path: Path) -> str:
 
 
 def sha_lf(path: Path) -> str:
-    """Hash text consistently across LF and CRLF checkouts."""
+    """Reviewed text pins survive Git's CRLF checkout; run evidence still hashes exact bytes."""
     return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 
 
@@ -111,10 +111,11 @@ def trusted_testbench_valid(project: Path, manifest: dict) -> tuple[bool, str]:
         if not isinstance(expected, str) or not re.fullmatch(r'[0-9a-f]{64}', expected):
             return False, f'trusted testbench hash is invalid: {name}'
         try:
-            actual = sha(local_file(project, name))
+            path = local_file(project, name)
+            actual = sha(path)
         except (OSError, ValueError) as exc:
             return False, f'trusted testbench file is missing or unsafe: {name}: {exc}'
-        if actual != expected:
+        if actual != expected and sha_lf(path) != expected:
             return False, f'trusted testbench changed since its hash was pinned: {name}'
     return True, 'operator-owned testbench hashes match the manifest'
 

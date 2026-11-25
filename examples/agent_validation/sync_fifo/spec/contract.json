@@ -1,0 +1,22 @@
+{
+  "name": "sync_fifo",
+  "reference": "spec/fifo_reference.sv",
+  "reference_top": "sync_fifo_reference",
+  "inputs": {"clk": 1, "rst_n": 1, "wr_en": 1, "rd_en": 1, "din": 8},
+  "reset": "rst_n",
+  "active": 0,
+  "parameters": {"DATA_WIDTH": 8, "DEPTH": 4},
+  "projections": [["occupancy", "occupancy"], ["read_pointer", "read_pointer"],
+                  ["write_pointer", "write_pointer"], ["storage[0]", "slot0"],
+                  ["storage[1]", "slot1"], ["storage[2]", "slot2"], ["storage[3]", "slot3"]],
+  "covers": {
+    "reachable_empty": {"signal": "count", "value": 0, "steps": 2},
+    "reachable_partial": {"signal": "count", "value": 2, "steps": 4, "stimulus": [["wr_en", 1], ["rd_en", 0]]},
+    "reachable_full": {"signal": "count", "value": 4, "steps": 6, "stimulus": [["wr_en", 1], ["rd_en", 0]]}
+  },
+  "mutations": {
+    "reset_loses_to_write": {"before": "if (!rst_n) begin", "after": "if (!rst_n && !wr_en) begin", "obligation": "reset_base", "steps": 3},
+    "full_write_bypass": {"before": "wr_en && !full;", "after": "wr_en && (!full || rd_en);", "obligation": "preservation", "steps": 8},
+    "reads_wrong_slot": {"before": "data_out <= storage[read_pointer];", "after": "data_out <= storage[~read_pointer];", "obligation": "preservation", "steps": 6}
+  }
+}

@@ -1,5 +1,11 @@
 # IC Forge
 
+RSI Chip 项目进展：[七阶段路线图](docs/rsi-roadmap.md) · [首轮基线](docs/rsi-baseline-2026-11-17.md) · [综合与 LEC](docs/lec.md)。
+[SV/UVM 有界契约 v0.14](docs/uvm-profile.md)包含 29 个用例、38 个有界特性；[同源 FIFO 流程](docs/fifo-flow.md)新增 24 个边界场景，逐拍验证复位与读写请求的优先级。完整 SV/UVM 与自研语义仍未完成。
+[单时钟规格验收](docs/spec-acceptance.md)支持两槽 FIFO 和 8 位计数器的独立规格证明、可达反例和证据复核。
+
+Stage 1 已接入 [开源 Verilator 运行后端](docs/verilator-runtime.md)：本机通过面向 Linux CI 的九项二态范围验收，含类虚调用和 interface/modport。三套后端分别生成证据。
+
 IC Forge 是面向数字 IC/FPGA 工程的终端 agent：从需求、RTL 生成与修复，到仿真、lint、安路 TD 实现、证据审查和交付归档。它也能把有明确文件范围的工作交给本机 Codex、Claude Code 或 OpenCode，再由宿主工程门禁验收。
 
 ## 快速开始
@@ -44,6 +50,7 @@ icforge flow my-design
 - [实验索引与复现入口](docs/experiment-log.md)
 - [三种 RV32I CPU 结果](docs/riscv-results.md) · [流程和指令范围](docs/riscv-flow.md)
 - [RV32I 独立执行对比](docs/rv32-external-reference.md) · [ACT 2.7.4 签名验收](docs/rv32-act.md)
+- [Stage 3 RV64 验收与 FPGA 基线](docs/rva23-stage3.md)
 - [HX1P35A HDMI 立方体实板记录](docs/hdmi-cube-flow.md)
 - [TinyStories260K 实板推理记录](docs/tinystories-flow.md)
 - [Agent 并行调度回归夹具](docs/agent-validation-roadmap.md)

@@ -1,0 +1,6 @@
+{
+  "project": "uvm-rtl-fifo",
+  "top_module": "fifo_two",
+  "rtl_sources": ["fifo_two.sv"],
+  "formal_equivalence": {"required": true, "method": "state-bijection"}
+}

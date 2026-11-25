@@ -42,6 +42,7 @@ HELP = """### 在终端完成设计闭环
 | `/tinyllm name --full` | TinyStories260K 参考验证、RTL 仿真与 FPGA 实现 |
 | `/verify` · `/synth` · `/td` | 仿真、综合、完整实现 |
 | `/lint` · `/review` | 严格 RTL lint、工程审查与阻塞项 |
+| `/spec-check` | 运行工程声明的独立规格证明 |
 | `/flow` · `/package` | 完整流程、交付；支持 --simulation-only |
 | `/suite --full` · `/replay --full` | CPU 基准、重放保存的 Luna 响应 |
 | `/status` · `/artifacts` · `/open path` | 当前证据、产物、文件预览 |
@@ -745,8 +746,13 @@ class ForgeApp(App):
                     arguments["architecture"] = tokens[1] if len(tokens) > 1 and not tokens[1].startswith("--") else "multi"
             elif action == "design":
                 arguments["brief"] = rest.removeprefix("--full ")
-            elif action in ("package", "review"):
+            elif action in ("package", "review", "flow"):
                 arguments["simulation_only"] = "--simulation-only" in tokens
+            elif action == 'sv-check':
+                if tokens:
+                    if len(tokens) != 2 or tokens[0] != '--backend':
+                        raise ValueError('用法：/sv-check [--backend icarus|modelsim|verilator]')
+                    arguments['sv_backend'] = tokens[1]
             elif action=='video-hardware':
                 arguments['program']='--program' in tokens
                 if '--device' in tokens:

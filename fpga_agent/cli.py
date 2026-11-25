@@ -110,7 +110,52 @@ def do_design(project: Path, brief: str, repair_rounds: int, provider: str = 'ex
     return 1
 
 
+def ensure_required_lec(project: Path) -> int:
+    """All TD entry points share the declared proof gate, including CPU flows."""
+    if load_manifest(project).get('formal_equivalence', {}).get('required') is not True:
+        return 0
+    from .lec import lec_valid, run_lec
+    from .quality import read_report
+    if lec_valid(project, read_report(project / 'reports/lec.json'))[0]:
+        return 0
+    report = run_lec(project)
+    if report['status'] != 'pass':
+        print('LEC gate: ' + report['reason'], file=sys.stderr)
+        return 2 if report['status'] == 'blocked' else 1
+    valid, reason = lec_valid(project, report)
+    if not valid:
+        print('LEC gate: ' + reason, file=sys.stderr)
+        return 1
+    return 0
+
+
+def do_flow(project: Path, *, simulation_only: bool = False, hardware_video: bool = False,
+            device: str = 'Hagibis') -> int:
+    from .spec_gate import run_project_spec, specification_evidence
+
+    if verify_project(project).status != 'pass':
+        return 1
+    specification = specification_evidence(project)
+    if specification.required and specification.status != 'current':
+        proof = run_project_spec(project)
+        if proof['status'] != 'pass':
+            print('Specification gate: ' + proof['reason'], file=sys.stderr)
+            return 2 if proof['status'] == 'blocked' else 1
+    if simulation_only:
+        return ensure_required_lec(project) or do_package(project, True)
+    code = do_td(project, 'full', None)
+    if code:
+        return code
+    if hardware_video:
+        from .video_hardware import hardware_run
+        if hardware_run(project, device=device, program=True)['status'] != 'pass':
+            return 1
+    return do_package(project)
+
+
 def do_td(project: Path, stage: str, td_root: str | None, *, update_manifest: bool = True) -> int:
+    from .spec_gate import specification_evidence
+
     manifest = load_manifest(project)
     if stage == "full" and not manifest.get("td_full_allowed", True):
         ports = ", ".join(manifest.get("unmapped_top_ports", []))
@@ -125,9 +170,25 @@ def do_td(project: Path, stage: str, td_root: str | None, *, update_manifest: bo
     if not valid:
         print(f"TD gate: {reason}. Run verification again.", file=sys.stderr)
         return 2
+    specification = specification_evidence(project)
+    if specification.required and specification.status != 'current':
+        print(f'Specification gate: {specification.reason}. Run icforge spec-check.', file=sys.stderr)
+        return 2
+    lec_code = ensure_required_lec(project)
+    if lec_code:
+        return lec_code
     started_at=datetime.now(timezone.utc).isoformat()
     build_inputs=input_hashes(project,manifest)
     code, output, command, run_dir = run_td(project, stage, td_root)
+    if specification_evidence(project) != specification:
+        code = 1
+        output += '\nSpecification policy or evidence changed during TD; implementation rejected.\n'
+    if manifest.get('formal_equivalence', {}).get('required') is True:
+        from .lec import lec_valid
+        from .quality import read_report
+        if not lec_valid(project, read_report(project / 'reports/lec.json'))[0]:
+            code = 1
+            output += '\nLEC inputs or evidence changed during TD; implementation rejected.\n'
     if input_hashes(project,load_manifest(project))!=build_inputs:
         code=1;output+='\nBuild inputs changed while TD was running; implementation evidence rejected.\n'
     for name in list(hdl_input_hashes(project,manifest['rtl_sources']))+[manifest['board_constraints'],manifest['timing_constraints']]:
@@ -197,6 +258,8 @@ def do_td(project: Path, stage: str, td_root: str | None, *, update_manifest: bo
 
 
 def do_package(project: Path, simulation_only: bool = False) -> int:
+    from .spec_gate import REPORT as SPEC_REPORT, specification_evidence, verify_archived_spec
+
     manifest = load_manifest(project)
     sim_file = project / "reports" / "simulation.json"
     td_file = project / "reports" / "td.json"
@@ -204,6 +267,10 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
     valid,reason=simulation_valid(project,manifest,sim_result)
     if not valid:
         print(f'Package gate: {reason}',file=sys.stderr)
+        return 2
+    specification = specification_evidence(project)
+    if specification.required and specification.status != 'current':
+        print(f'Package specification gate: {specification.reason}', file=sys.stderr)
         return 2
     td_result = json.loads(td_file.read_text(encoding='utf-8')) if td_file.is_file() and not simulation_only else {}
     if not simulation_only:
@@ -219,6 +286,13 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
     verified_inputs = simulation_input_hashes(project,manifest)
     build_inputs = input_hashes(project,manifest)
     report_hashes = {name:sha(project/name) for name in ('reports/simulation.json','reports/td.json') if (project/name).is_file()}
+    from .lec import lec_valid
+    lec_path = project / 'reports/lec.json'
+    lec_report = json.loads(lec_path.read_text(encoding='utf-8')) if lec_path.is_file() else {}
+    if lec_valid(project, lec_report)[0]:
+        report_hashes['reports/lec.json'] = sha(lec_path)
+    else:
+        lec_report = {}
     hardware_required=not simulation_only and manifest.get('hardware_acceptance',{}).get('required') is True
     if hardware_required:
         for name in ('reports/hardware-video.json','reports/programming.json'):
@@ -250,7 +324,7 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
                         # These reports are fingerprinted as literal bytes by
                         # the physical acceptance chain. Reformatting JSON (or
                         # normalizing Windows CRLF) invalidates that evidence.
-                        bound_report=relative.as_posix() in {'reports/hardware-video.json','reports/programming.json'}
+                        bound_report=relative.as_posix() in {'reports/hardware-video.json','reports/programming.json','reports/lec.json',SPEC_REPORT}
                         if path.suffix.lower() == '.json' and folder == 'reports' and not bound_report:
                             archive.writestr(relative.as_posix(), json.dumps(json.loads(portable_text(path)), ensure_ascii=False, indent=2) + "\n")
                         else:
@@ -260,9 +334,15 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             if path.is_file():
                 archive.write(path, path.relative_to(project).as_posix())
         archive.write(project / "project.json", "project.json")
+        for name in lec_report.get('artifacts', {}):
+            if name not in archive.namelist():
+                archive.write(project / name, name)
+        for name in specification.artifacts.keys() - set(archive.namelist()):
+            archive.write(project/name, name)
         archive.writestr('delivery.json',json.dumps({'kind':'simulation-only' if simulation_only else 'implemented', 'inputs':build_inputs,'bitstreams':td_result.get('bitstream_hashes',{}),
             'engineering_signoff':review['engineering_signoff'],'required_open_items':review['required_open_items'],
-            'hardware_report_sha256':report_hashes.get('reports/hardware-video.json')},indent=2))
+            'hardware_report_sha256':report_hashes.get('reports/hardware-video.json'),
+            'specification_report_sha256':specification.artifacts.get(SPEC_REPORT)},indent=2))
         if hardware_required:
             programming=json.loads((project/'reports/programming.json').read_text(encoding='utf-8'))
             svf=(project/programming['svf_file']).resolve()
@@ -305,6 +385,12 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
         if any(sha(project/name) != expected for name,expected in report_hashes.items()):
             raise ValueError('Verification reports changed while packaging; archive rejected.')
         current_manifest = load_manifest(project)
+        if specification_evidence(project) != specification:
+            raise ValueError('Delivery specification policy or evidence changed during packaging.')
+        if lec_report or current_manifest.get('formal_equivalence', {}).get('required') is True:
+            valid, reason = lec_valid(project, lec_report)
+            if not valid:
+                raise ValueError('Delivery LEC evidence rejected: ' + reason)
         valid,reason=simulation_valid(project,current_manifest,sim_result)
         if not valid:
             raise ValueError('Delivery simulation evidence rejected: '+reason)
@@ -318,6 +404,10 @@ def do_package(project: Path, simulation_only: bool = False) -> int:
             valid,reason=evidence_valid(project,hardware)
             if not valid:raise ValueError('Delivery hardware evidence rejected: '+reason)
         with zipfile.ZipFile(pending) as archive:
+            verify_archived_spec(archive, specification.artifacts)
+            for name, expected in lec_report.get('artifacts', {}).items():
+                if hashlib.sha256(archive.read(name)).hexdigest() != expected:
+                    raise ValueError(f'Archived LEC artifact differs: {name}')
             for name,expected in verified_inputs.items():
                 if name.startswith('@'):
                     continue
@@ -362,6 +452,22 @@ def parser() -> argparse.ArgumentParser:
 
     verify = commands.add_parser("verify", help="运行自检 testbench 并保存报告")
     verify.add_argument("project")
+    sv = commands.add_parser('sv-check', help='Bounded SV semantics and official-UVM probes; not full conformance certification')
+    sv.add_argument('--output', default='reports/sv-conformance.json')
+    sv.add_argument('--case', action='append', dest='case_ids')
+    sv.add_argument('--required-only', action='store_true')
+    sv.add_argument('--uvm-root')
+    sv.add_argument('--timeout', type=int, default=60)
+    sv.add_argument('--backend', choices=('icarus', 'modelsim', 'verilator'), default='icarus')
+    lec = commands.add_parser('lec', help='Yosys synthesis and explicit combinational/state/reset equivalence contracts')
+    lec.add_argument('project')
+    lec.add_argument('--yosys', help='Yosys executable; defaults to yosys or yowasp-yosys')
+    lec.add_argument('--timeout', type=int, default=120)
+    lec.add_argument('--netlist', help='Compare a project-local Verilog netlist instead of synthesizing a new one')
+    spec = commands.add_parser('spec-check', help='Prove the project RTL against its independent specification')
+    spec.add_argument('project')
+    spec.add_argument('--yosys')
+    spec.add_argument('--timeout', type=int, default=60)
     video = commands.add_parser('video-hardware',help='终端采集 HDMI，并用独立几何参考验证实板立方体旋转')
     video.add_argument('project')
     video.add_argument('--device',default='Hagibis')
@@ -386,7 +492,10 @@ def parser() -> argparse.ArgumentParser:
     package.add_argument('--simulation-only',action='store_true')
     flow=commands.add_parser('flow',help='verify, TD full, and evidence-gated delivery')
     flow.add_argument('project')
-    flow.add_argument('--hardware-video',action='store_true',help='TD 后下载到 SRAM、采集 HDMI 并验证旋转，再交付')
+    flow_scope = flow.add_mutually_exclusive_group()
+    flow_scope.add_argument('--hardware-video',action='store_true',help='TD 后下载到 SRAM、采集 HDMI 并验证旋转，再交付')
+    flow_scope.add_argument('--simulation-only', action='store_true',
+                            help='Run simulation and required proofs, then package without physical implementation')
     flow.add_argument('--device',default='Hagibis')
     cpu=commands.add_parser('cpu-design',help='generate/repair RV32I through selected model backend and independent verifier')
     cpu.add_argument('project')
@@ -430,6 +539,16 @@ def main(argv: list[str] | None = None) -> int:
         argv.insert(0, "tui")
     args = parser().parse_args(argv)
     try:
+        if args.command == 'sv-check':
+            from .sv_conformance import run_conformance
+            report = run_conformance(Path(args.output), case_ids=args.case_ids, required_only=args.required_only,
+                                     uvm_root=Path(args.uvm_root) if args.uvm_root else None, timeout=args.timeout,
+                                     backend=args.backend)
+            print('Bounded baseline: '+report['baseline_status']+'; full SV/UVM: incomplete')
+            for row in report['cases']:
+                print(row['id']+': '+row['status']+' — '+row['reason'])
+            print('Evidence: '+str(Path(args.output).resolve()))
+            return 0 if report['status']=='pass' else 2 if report['status'] in {'blocked','partial'} else 1
         if args.command == 'knowledge':
             from .knowledge import dispatch
             return dispatch(args)
@@ -544,20 +663,23 @@ def main(argv: list[str] | None = None) -> int:
             print(result.output, end="")
             print(f"\n仿真状态：{result.status}（{result.elapsed_seconds:.3f}s）")
             return 0 if result.status == "pass" else 1
+        if args.command == 'lec':
+            from .lec import run_lec
+            report = run_lec(project, yosys=args.yosys, timeout=args.timeout, netlist=args.netlist)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report['status'] == 'pass' else 2 if report['status'] == 'blocked' else 1
+        if args.command == 'spec-check':
+            from .spec_gate import run_project_spec
+            report = run_project_spec(project, yosys=args.yosys, timeout=args.timeout)
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+            return 0 if report['status'] == 'pass' else 2 if report['status'] == 'blocked' else 1
         if args.command == "td":
             return do_td(project, args.stage, args.td_root)
         if args.command == "package":
             return do_package(project,args.simulation_only)
         if args.command=='flow':
-            result=verify_project(project)
-            if result.status!='pass':return 1
-            code=do_td(project,'full',None)
-            if code:return code
-            if args.hardware_video:
-                from .video_hardware import hardware_run
-                report=hardware_run(project,device=args.device,program=True)
-                if report['status']!='pass':return 1
-            return do_package(project)
+            return do_flow(project, simulation_only=args.simulation_only,
+                           hardware_video=args.hardware_video, device=args.device)
         raise ValueError(f"不支持的命令：{args.command}")
     except Exception as exc:
         print(f"错误：{exc}", file=sys.stderr)

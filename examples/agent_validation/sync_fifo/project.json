@@ -36,6 +36,15 @@
     "empty"
   ],
   "td_full_allowed": false,
+  "formal_equivalence": {"required": true, "method": "state-bijection"},
+  "formal_specification": {
+    "required": true,
+    "contract": "spec/contract.json",
+    "trusted_hashes": {
+      "spec/contract.json": "45c7eb0668da94e67e09126582bd78c585a5494046012e549f1e077c5eb0ef9f",
+      "spec/fifo_reference.sv": "290310f3763090e29c14d855a7516e82c91b580f41adaf659c4323bab7b15152"
+    }
+  },
   "verification": {
     "kind": "trusted-testbench",
     "trusted_files": [
