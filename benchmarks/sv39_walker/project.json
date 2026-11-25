@@ -1,0 +1,6 @@
+{
+  "top_module": "sv39_walker",
+  "rtl_sources": ["rtl/sv39_walker.v"],
+  "testbench_sources": ["tb/tb_sv39.sv"],
+  "formal_equivalence": {"required": true, "method": "state-bijection"}
+}

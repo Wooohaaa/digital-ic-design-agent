@@ -65,9 +65,21 @@ def find_yosys() -> str | None:
     return str(bundled) if bundled.is_file() else None
 
 
+def _top_parameters(manifest: dict) -> dict:
+    parameters = manifest.get('formal_equivalence', {}).get('top_parameters', {})
+    if not isinstance(parameters, dict) or any(
+        not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name)
+        or type(value) is not int or not 0 <= value < 2**31
+        for name, value in parameters.items()
+    ):
+        raise ValueError('LEC top_parameters must map identifiers to unsigned 31-bit integers')
+    return parameters
+
+
 def lec_inputs(project: Path, netlist: str | None = None) -> dict[str, str]:
     manifest = load_manifest(project)
     proof_method(manifest)
+    _top_parameters(manifest)
     top, sources = proof_top(manifest), manifest.get('rtl_sources')
     if not isinstance(sources, list) or not sources or any(not isinstance(s, str) for s in sources):
         raise ValueError('LEC requires nonempty rtl_sources')
@@ -120,7 +132,10 @@ def run_lec(project: Path, *, yosys: str | None = None, timeout: int = 120,
                        for name in manifest['rtl_sources'])
     state_normalize = 'dffunmap\nopt_clean\n' if method in STATE_METHODS else ''
     memory_pass = 'memory -nordff' if method in STATE_METHODS else 'memory'
-    normalize = (f'read_verilog -sv -I. {sources}\n'
+    parameters = _top_parameters(manifest)
+    overrides = ' '.join(f'-set {name} {value}' for name, value in sorted(parameters.items()))
+    specialize = f'chparam {overrides} {top}\n' if parameters else ''
+    normalize = (f'read_verilog -sv -I. {sources}\n' + specialize +
                  f'hierarchy -check -top {top}\nproc\nflatten\n{memory_pass}\nopt\ncheck -assert\n'
                  + state_normalize + f'rename {top} gold\nwrite_rtlil ../gold.il\n'
                  + ('write_json ../gold.json\n' if method in STATE_METHODS else ''))
