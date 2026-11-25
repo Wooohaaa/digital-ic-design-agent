@@ -74,6 +74,11 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def sha_lf(path: Path) -> str:
+    """Hash text consistently across LF and CRLF checkouts."""
+    return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 def source_hashes(project: Path, manifest: dict) -> dict[str,str]:
     result={}
     for name in manifest['rtl_sources']+manifest['testbench_sources']:
