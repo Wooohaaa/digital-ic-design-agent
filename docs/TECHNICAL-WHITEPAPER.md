@@ -7,6 +7,11 @@
 > 本文聚焦三件事：**它做出了什么**、**它坚持什么理念**、**它用什么技术实现**。
 > 所有数字均来自仓库内已保存的报告与实测记录。
 
+<p align="center">
+  <img src="images/poster.jpg" alt="IC Forge — Build What's Next" width="100%">
+</p>
+<p align="center"><em>图 0 · 从需求到证据：让想法成为可验证的硬件</em></p>
+
 ---
 
 ## 0. 一句话定位
@@ -22,6 +27,14 @@ OpenCode，在隔离 worktree 中并行执行，由宿主工程门禁统一验�
 
 规模：13,407 行 Python（`fpga_agent/`），38 个测试文件、217 个测试函数，
 CI 矩阵 Python 3.11 / 3.12 × Windows / Linux 全绿。
+
+下图以十二个画面完整呈现了这套方法论：**从一句需求出发，经 RTL 生成、目标驱动的持续推进、
+独立验证、逐拍 Signal Intelligence、FPGA 实现、多 Agent 协作，直到真实硬件画面与可继续的工程交付**。
+
+<p align="center">
+  <img src="images/contact-sheet.jpg" alt="IC Forge 全流程故事板" width="100%">
+</p>
+<p align="center"><em>图 1 · 从意图到证据：十二个画面看完整个工程闭环</em></p>
 
 ---
 
@@ -88,6 +101,23 @@ LEC 的返回码被严格区分：`0 = pass`、`2 = 工具缺失 blocked`、`1 =
 ---
 
 ## 2. 系统架构与关键技术
+
+终端工作台是这套架构的操作入口：左侧管理工程与快捷动作，中部是对话与工具证据流，
+右侧实时呈现当前工程的设计证据（时序 WNS、资源、流水线阶段、可用工具链）。
+下图是 `rv32_pipeline` 通过验证并生成交付包后的真实界面。
+
+<p align="center">
+  <img src="images/tui-verified.png" alt="IC Forge 终端工作台 — 验证通过与交付证据" width="95%">
+</p>
+<p align="center"><em>图 2 · 运行界面：验证结果、交付清单与设计证据同屏呈现</em></p>
+
+同一套工作台在 Windows PowerShell 中的真实运行画面——过程性工程文件完整保留 locally，
+模型、工具链与工作区状态在启动屏一目了然。
+
+<p align="center">
+  <img src="images/icforge-tui-powershell.png" alt="IC Forge 在 Windows PowerShell 中运行" width="95%">
+</p>
+<p align="center"><em>图 3 · Windows PowerShell 下的 IC Forge 终端工作台（过程性工程记录）</em></p>
 
 ### 2.1 分层结构
 
@@ -230,6 +260,16 @@ CPU 验证由四层独立机制叠加：
 
 - **HDMI 旋转立方体**：两次独立 SRAM 重载，采集卡分别接受 **18/18** 与 **30/30** 个视频样本，均识别多个旋转姿态；setup/hold WNS **+5.746 / +0.066 ns**，TNS = 0
 - **TinyStories260K**：模型完整性 CRC、logits 与生成 token 完成板上验收
+
+<p align="center">
+  <img src="images/hardware-full.jpg" alt="HX1P35A HDMI 双轴旋转立方体实板画面" width="95%">
+</p>
+<p align="center"><em>图 4 · 真实硬件，真实画面：HX1P35A HDMI 双轴旋转立方体，18/18 与 30/30 采样通过</em></p>
+
+<p align="center">
+  <img src="images/hdmi-cube-hardware.gif" alt="HDMI 立方体旋转实板视频" width="480">
+</p>
+<p align="center"><em>图 5 · 实板采集片段：多个旋转姿态被采集卡稳定识别（GIF 动画）</em></p>
 
 ---
 
