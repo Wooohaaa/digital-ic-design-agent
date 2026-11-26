@@ -8,9 +8,9 @@
 > 所有数字均来自仓库内已保存的报告与实测记录。
 
 <p align="center">
-  <img src="images/poster.jpg" alt="IC Forge — Build What's Next" width="100%">
+  <img src="images/real_tui.png" alt="IC Forge 0.6.0 真实运行界面" width="95%">
 </p>
-<p align="center"><em>图 0 · 从需求到证据：让想法成为可验证的硬件</em></p>
+<p align="center"><em>图 1 · 真实运行界面：IC Forge 0.6.0 终端工作台（Linux 实机截图）</em></p>
 
 ---
 
@@ -28,13 +28,13 @@ OpenCode，在隔离 worktree 中并行执行，由宿主工程门禁统一验�
 规模：13,407 行 Python（`fpga_agent/`），38 个测试文件、217 个测试函数，
 CI 矩阵 Python 3.11 / 3.12 × Windows / Linux 全绿。
 
-下图以十二个画面完整呈现了这套方法论：**从一句需求出发，经 RTL 生成、目标驱动的持续推进、
-独立验证、逐拍 Signal Intelligence、FPGA 实现、多 Agent 协作，直到真实硬件画面与可继续的工程交付**。
+在终端中切换到 `ORCHESTRATE` 模式后，底部状态栏高亮显示该模式——
+这是"一个主管指挥多个执行者"的真实运行入口：
 
 <p align="center">
-  <img src="images/contact-sheet.jpg" alt="IC Forge 全流程故事板" width="100%">
+  <img src="images/real_orchestrate.png" alt="IC Forge 真实 ORCHESTRATE 模式" width="95%">
 </p>
-<p align="center"><em>图 1 · 从意图到证据：十二个画面看完整个工程闭环</em></p>
+<p align="center"><em>图 2 · 真实运行画面：ORCHESTRATE 模式已启用（Linux 实机截图）</em></p>
 
 ---
 
@@ -102,22 +102,22 @@ LEC 的返回码被严格区分：`0 = pass`、`2 = 工具缺失 blocked`、`1 =
 
 ## 2. 系统架构与关键技术
 
-终端工作台是这套架构的操作入口：左侧管理工程与快捷动作，中部是对话与工具证据流，
-右侧实时呈现当前工程的设计证据（时序 WNS、资源、流水线阶段、可用工具链）。
-下图是 `rv32_pipeline` 通过验证并生成交付包后的真实界面。
+终端工作台是这套架构的操作入口。在 `ORCHESTRATE` 模式下，主管把目标拆解为有边界的文件范围，
+并行派发给多个执行者（Claude Code、OpenCode、Codex），各自在隔离 worktree 中工作，
+所有产出最终汇聚到宿主统一验收。下图展示这一调度过程：
 
 <p align="center">
-  <img src="images/tui-verified.png" alt="IC Forge 终端工作台 — 验证通过与交付证据" width="95%">
+  <img src="images/demo_orchestrate_real_terminal.png" alt="主管指挥多个 Agent 的编排界面" width="95%">
 </p>
-<p align="center"><em>图 2 · 运行界面：验证结果、交付清单与设计证据同屏呈现</em></p>
+<p align="center"><em>图 3 · 多 Agent 指挥界面：一个主管派发任务给 Claude Code / OpenCode / Codex，统一由宿主验收</em></p>
 
-同一套工作台在 Windows PowerShell 中的真实运行画面——过程性工程文件完整保留 locally，
+同一套工作台在 Windows PowerShell 中的真实运行画面——过程性工程文件完整保留在本地，
 模型、工具链与工作区状态在启动屏一目了然。
 
 <p align="center">
   <img src="images/icforge-tui-powershell.png" alt="IC Forge 在 Windows PowerShell 中运行" width="95%">
 </p>
-<p align="center"><em>图 3 · Windows PowerShell 下的 IC Forge 终端工作台（过程性工程记录）</em></p>
+<p align="center"><em>图 4 · Windows PowerShell 下的 IC Forge 终端工作台（过程性工程记录）</em></p>
 
 ### 2.1 分层结构
 
@@ -186,17 +186,25 @@ CPU 验证由四层独立机制叠加：
 这解决了 AI 生成工程中最隐蔽的问题：**证据与代码悄悄脱节**。
 在这里，证据不是一次性附件，而是随代码共同演化的活体。
 
-### 2.5 关键技术四：跨 Agent 编排与固定宿主验收
+### 2.5 关键技术四：一个主管，指挥多个 Claude Code / OpenCode
+
+这是整套系统最具差异化的能力：**IC Forge 不只自己干活，它指挥一支 Agent 团队。**
+
+主管（Supervisor）本身**只读规划**——它把目标拆解为若干有明确文件边界的子任务，
+为每个子任务创建隔离 worktree，然后派发给本机已登录的 Claude Code、OpenCode、Codex。
+执行者使用各自的原生账号与模型配置，主管的 API 凭据不会自动下传。
 
 `orchestration.py` 的设计要点：
 
-- 主管模型**只读规划**；执行者仅在自己的 worktree 内获得实现权限
+- **目标驱动、多路并行**：一个目标 → 拆解 → N 个隔离 worktree → 并行派发 → 汇聚验收（见图 3）
 - 支持本机 Codex / Claude Code / OpenCode，各自使用原生账号与配置
 - 主管凭据**不自动传给执行者**，需显式 `ICFORGE_EXECUTOR_` 前缀覆盖
 - 通用任务要求预先声明 `.icforge/checks.json`；**主管不能在任务中替换验收配置**
 - 有 `tests/` 时默认运行 Python unittest，其它工程显式提供检查
+- 暂停 / 恢复 / 长任务续跑，主管只看证据，不碰实现
 
-**Agent 可以分工，但验收权始终在宿主**——这是多 Agent 系统可信协作的基石。
+**Agent 可以分工，但验收权始终在宿主**——这是多 Agent 系统可信协作的基石，
+也是"用多个通用 Agent 协作完成芯片工程"这一理念能够成立的关键。
 
 ### 2.6 关键技术五：有界上下文与可迁移流程知识
 
@@ -260,16 +268,6 @@ CPU 验证由四层独立机制叠加：
 
 - **HDMI 旋转立方体**：两次独立 SRAM 重载，采集卡分别接受 **18/18** 与 **30/30** 个视频样本，均识别多个旋转姿态；setup/hold WNS **+5.746 / +0.066 ns**，TNS = 0
 - **TinyStories260K**：模型完整性 CRC、logits 与生成 token 完成板上验收
-
-<p align="center">
-  <img src="images/hardware-full.jpg" alt="HX1P35A HDMI 双轴旋转立方体实板画面" width="95%">
-</p>
-<p align="center"><em>图 4 · 真实硬件，真实画面：HX1P35A HDMI 双轴旋转立方体，18/18 与 30/30 采样通过</em></p>
-
-<p align="center">
-  <img src="images/hdmi-cube-hardware.gif" alt="HDMI 立方体旋转实板视频" width="480">
-</p>
-<p align="center"><em>图 5 · 实板采集片段：多个旋转姿态被采集卡稳定识别（GIF 动画）</em></p>
 
 ---
 
